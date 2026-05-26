@@ -1,0 +1,123 @@
+{
+  "description": "SYNTHETIC DATA - GI-related medical indicator definitions with reference ranges.",
+  "indicators": [
+    {
+      "name": "hp_status",
+      "name_cn": "幽门螺杆菌状态",
+      "category": "hp",
+      "type": "enum",
+      "values": ["positive", "negative"],
+      "note": "C13/C14 呼气试验或血清抗体检测"
+    },
+    {
+      "name": "hp_dob_value",
+      "name_cn": "HP DOB 值",
+      "category": "hp",
+      "type": "numeric",
+      "unit": "‰",
+      "reference_high": 4.0,
+      "note": "C13 呼气试验 DOB 值，≥4.0‰ 为阳性"
+    },
+    {
+      "name": "ulcer_stage",
+      "name_cn": "溃疡分期",
+      "category": "gastroscopy",
+      "type": "enum",
+      "values": ["A1", "A2", "H1", "H2", "S1", "S2"],
+      "note": "A=活动期 H=愈合期 S=瘢痕期"
+    },
+    {
+      "name": "ulcer_size",
+      "name_cn": "溃疡大小",
+      "category": "gastroscopy",
+      "type": "text",
+      "unit": "cm",
+      "note": "测量溃疡最大直径"
+    },
+    {
+      "name": "ulcer_location",
+      "name_cn": "溃疡位置",
+      "category": "gastroscopy",
+      "type": "text",
+      "note": "十二指肠球部前壁/后壁/大弯侧/小弯侧"
+    },
+    {
+      "name": "hemoglobin",
+      "name_cn": "血红蛋白",
+      "category": "blood",
+      "type": "numeric",
+      "unit": "g/L",
+      "reference_low_male": 130,
+      "reference_high_male": 175,
+      "reference_low_female": 115,
+      "reference_high_female": 150,
+      "note": "低于正常提示贫血，消化性溃疡需排除慢性失血"
+    },
+    {
+      "name": "rbc",
+      "name_cn": "红细胞计数",
+      "category": "blood",
+      "type": "numeric",
+      "unit": "×10¹²/L",
+      "reference_low_male": 4.3,
+      "reference_high_male": 5.8,
+      "reference_low_female": 3.8,
+      "reference_high_female": 5.1
+    },
+    {
+      "name": "wbc",
+      "name_cn": "白细胞计数",
+      "category": "blood",
+      "type": "numeric",
+      "unit": "×10⁹/L",
+      "reference_low": 3.5,
+      "reference_high": 9.5
+    },
+    {
+      "name": "platelet",
+      "name_cn": "血小板计数",
+      "category": "blood",
+      "type": "numeric",
+      "unit": "×10⁹/L",
+      "reference_low": 125,
+      "reference_high": 350
+    },
+    {
+      "name": "alt",
+      "name_cn": "谷丙转氨酶",
+      "category": "liver",
+      "type": "numeric",
+      "unit": "U/L",
+      "reference_high": 40,
+      "note": "用药安全监测，抗生素可能导致升高"
+    },
+    {
+      "name": "ast",
+      "name_cn": "谷草转氨酶",
+      "category": "liver",
+      "type": "numeric",
+      "unit": "U/L",
+      "reference_high": 40
+    },
+    {
+      "name": "creatinine",
+      "name_cn": "肌酐",
+      "category": "kidney",
+      "type": "numeric",
+      "unit": "μmol/L",
+      "reference_low_male": 57,
+      "reference_high_male": 111,
+      "reference_low_female": 41,
+      "reference_high_female": 81,
+      "note": "用药安全监测"
+    },
+    {
+      "name": "stool_occult_blood",
+      "name_cn": "粪便隐血",
+      "category": "stool",
+      "type": "enum",
+      "values": ["positive", "negative"],
+      "note": "阳性提示消化道出血可能"
+    }
+  ]
+}

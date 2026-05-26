@@ -1,0 +1,70 @@
+{
+  "description": "SYNTHETIC DATA - Dietary guidance for duodenal ulcer patients. Not real medical advice.",
+  "trigger_foods": [
+    {
+      "category": "辛辣刺激",
+      "items": ["辣椒", "花椒", "胡椒", "芥末", "咖喱"],
+      "reason": "刺激胃酸分泌，加重黏膜损伤",
+      "risk_level": "high"
+    },
+    {
+      "category": "酸性食物",
+      "items": ["柠檬", "醋", "酸梅", "番茄酱", "橙汁"],
+      "reason": "增加胃内酸度，刺激溃疡面",
+      "risk_level": "medium"
+    },
+    {
+      "category": "咖啡因",
+      "items": ["咖啡", "浓茶", "可乐", "功能饮料"],
+      "reason": "促进胃酸分泌",
+      "risk_level": "medium"
+    },
+    {
+      "category": "酒精",
+      "items": ["白酒", "啤酒", "红酒", "黄酒"],
+      "reason": "直接损伤胃黏膜，增加出血风险",
+      "risk_level": "high"
+    },
+    {
+      "category": "产气食物",
+      "items": ["豆类", "洋葱", "西兰花", "甘蓝", "碳酸饮料"],
+      "reason": "胀气加重不适",
+      "risk_level": "low"
+    },
+    {
+      "category": "粗糙坚硬食物",
+      "items": ["坚果", "粗粮饼干", "炸物", "腌菜"],
+      "reason": "机械性刺激溃疡面",
+      "risk_level": "medium"
+    }
+  ],
+  "safe_foods": [
+    {
+      "category": "主食",
+      "items": ["米饭", "面条", "馒头", "粥", "面包"],
+      "note": "软烂易消化为主"
+    },
+    {
+      "category": "蛋白质",
+      "items": ["鸡蛋", "鱼肉", "鸡胸肉", "豆腐", "牛奶"],
+      "note": "选择低脂、易消化的蛋白质来源"
+    },
+    {
+      "category": "蔬菜",
+      "items": ["山药", "南瓜", "胡萝卜", "冬瓜", "白菜"],
+      "note": "煮熟煮软，避免生食"
+    },
+    {
+      "category": "水果",
+      "items": ["香蕉", "苹果（蒸熟）", "木瓜", "梨"],
+      "note": "避免空腹食用，避免过酸水果"
+    }
+  ],
+  "eating_habits": [
+    "少食多餐，每天 4-5 顿，避免暴饮暴食",
+    "细嚼慢咽，充分咀嚼后再吞咽",
+    "避免睡前 2 小时内进食",
+    "食物温度适中，避免过烫或过冷",
+    "规律进餐，避免长时间空腹"
+  ]
+}

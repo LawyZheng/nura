@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package nura.worker;
+
+option go_package = "github.com/LawyZheng/nura/proto";
+
+// WorkerService defines the gRPC interface for Phase 2+ Python sidecar workers.
+// Workers handle specialized processing: OCR, clinical NLP, advanced RAG.
+service WorkerService {
+  // Process handles a generic worker request (OCR, NLP, etc).
+  rpc Process(WorkerRequest) returns (WorkerResponse);
+
+  // HealthCheck verifies the worker is available.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message WorkerRequest {
+  string worker_type = 1;     // ocr / clinical_nlp / rag
+  bytes  payload = 2;         // task-specific payload (JSON or binary)
+  map<string, string> metadata = 3;
+}
+
+message WorkerResponse {
+  bool   success = 1;
+  bytes  result = 2;          // task-specific result (JSON)
+  string error = 3;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool   healthy = 1;
+  string version = 2;
+}
