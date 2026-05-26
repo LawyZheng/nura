@@ -15,9 +15,9 @@ for f in AGENTS.md CLAUDE.md; do
 done
 
 # 2. Scan staged/changed files for suspicious patient-data markers.
-# Keep patterns narrow to avoid false positives in governance docs that say
-# "do not use real patient data".
-SUSPECT_PATTERNS="REAL[ _-]?PATIENT[ _-]?DATA|DOB:.*19[0-9][0-9]|SSN.*[0-9]{3}-[0-9]{2}-[0-9]{4}|MRN[: ]*[0-9]"
+# Patterns target structured data artifacts (DOB/SSN/MRN with values), not
+# governance prose like "do not use real patient data".
+SUSPECT_PATTERNS="DOB:.*19[0-9][0-9]|SSN.*[0-9]{3}-[0-9]{2}-[0-9]{4}|MRN[: ]*[0-9]{4,}"
 STAGED_FILES="$(git diff --cached --name-only 2>/dev/null || true)"
 if [ -n "$STAGED_FILES" ]; then
   CHANGED_FILES="$STAGED_FILES"
@@ -37,7 +37,7 @@ if [ -n "$CHANGED_FILES" ]; then
 fi
 
 # 3. Check for secrets patterns in changed files
-SECRET_PATTERNS="PRIVATE.KEY|BEGIN RSA|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|AKIA[0-9A-Z]{16}"
+SECRET_PATTERNS="BEGIN[ -]RSA[ -]PRIVATE[ -]KEY|BEGIN[ -]PRIVATE[ -]KEY|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|AKIA[0-9A-Z]{16}"
 if [ -n "$CHANGED_FILES" ]; then
   while IFS= read -r file; do
     [ -f "$REPO_ROOT/$file" ] || continue

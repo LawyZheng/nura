@@ -11,10 +11,7 @@ Nura (知愈) is a local-first health AI agent. It is NOT a diagnosis or prescri
 
 ### Current Implementation Constraints
 
-Canonical product and architecture decisions live in the Obsidian project docs, especially:
-- `/Volumes/MacMiniSSD/Obsidian Vault/1. 项目/nura/MVP方案.md`
-- `/Volumes/MacMiniSSD/Obsidian Vault/1. 项目/nura/可行性报告.md`
-- `/Volumes/MacMiniSSD/Obsidian Vault/1. 项目/nura/调研/`
+Canonical product and architecture decisions live in the private Nura Obsidian project docs (not committed to this repo). Key documents include MVP方案, 可行性报告, and the 调研 research directory.
 
 This file only repeats constraints that directly affect day-to-day agent behavior:
 - Preserve local-first behavior; do not introduce cloud dependencies into core functionality without explicit approval.
@@ -27,7 +24,7 @@ This file only repeats constraints that directly affect day-to-day agent behavio
 | Path | Purpose |
 |------|---------|
 | This repo | Nura source code |
-| `/Volumes/MacMiniSSD/Obsidian Vault/1. 项目/nura` | Canonical project docs (design, decisions, meeting notes) |
+| `$NURA_OBSIDIAN_DIR` | Canonical project docs (design, decisions, meeting notes) — private, not in this repo |
 
 ## Worktree Convention
 
@@ -35,7 +32,7 @@ Feature work uses isolated worktrees:
 
 | Item | Pattern |
 |------|---------|
-| Worktree path | `/Volumes/MacMiniSSD/Workspace/OSS/.nura-worktree/<feature-slug>` |
+| Worktree path | `$NURA_WORKTREE_ROOT/<feature-slug>` (sibling worktree outside this repo) |
 | Branch name | `lawy-hermes/nura-<feature-slug>` |
 | tmux session | `nura-<feature-slug>` |
 
@@ -111,7 +108,7 @@ Feature work uses isolated worktrees:
 
 ## Obsidian Documentation
 
-When creating or editing Nura project documents in the Obsidian vault (`/Volumes/MacMiniSSD/Obsidian Vault/1. 项目/nura`):
+When creating or editing Nura project documents in the Obsidian vault (`$NURA_OBSIDIAN_DIR`):
 - Follow the vault's root `CLAUDE.md` rules.
 - Write in Chinese.
 - Include Claude session ID in YAML frontmatter when creating new documents.
