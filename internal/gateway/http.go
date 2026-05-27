@@ -83,6 +83,9 @@ func (gw *Server) routes() {
 	api.GET("/reminders/pending", gw.handlePendingReminders)
 	api.POST("/reminders/:id/done", gw.handleMarkReminderDone)
 	api.GET("/patient/:id/summary/pdf", gw.handleSummaryPDF)
+	api.POST("/patient/:id/share", gw.handleCreateShareLink)
+	api.GET("/patient/:id/shares", gw.handleListShareLinks)
+	api.DELETE("/patient/:id/share/:share_id", gw.handleDeleteShareLink)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
