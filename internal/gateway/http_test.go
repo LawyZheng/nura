@@ -509,6 +509,41 @@ func TestWeb_ReportList(t *testing.T) {
 	}
 }
 
+func TestWeb_ReportDetail(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/reports/1", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "报告原文") {
+		t.Error("expected page to contain '报告原文'")
+	}
+	if !strings.Contains(body, "HP状态") || !strings.Contains(body, "阳性") {
+		t.Error("expected abnormal indicator with highlighting")
+	}
+	if !strings.Contains(body, "badge-danger") {
+		t.Error("expected danger badge for abnormal indicator")
+	}
+}
+
+func TestWeb_ReportDetail_WrongPatient(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", "/patient/999/reports/1", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
 func TestWeb_Dashboard_NotFound(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
