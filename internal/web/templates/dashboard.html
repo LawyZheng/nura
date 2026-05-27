@@ -10,6 +10,23 @@
   <a href="/patient/{{.PatientID}}/medications">用药管理</a>
   <a href="/patient/{{.PatientID}}/trends">趋势分析</a>
   <a href="/patient/{{.PatientID}}/chat">AI 对话</a>
+  <a href="/api/patient/{{.PatientID}}/summary/pdf" class="btn btn-sm">生成复诊摘要</a>
+  <button class="btn btn-sm" onclick="document.getElementById('share-form').style.display=document.getElementById('share-form').style.display==='none'?'block':'none'">分享给家属</button>
+</div>
+
+<div id="share-form" class="card" style="display:none">
+  <h3>生成家属共享链接</h3>
+  <form onsubmit="return createShareLink(event, {{.PatientID}})">
+    <div class="form-group">
+      <label>访问密码（可选，4位数字）</label>
+      <input type="text" id="share-passcode" maxlength="4" pattern="\d{0,4}" placeholder="留空表示无密码" style="max-width:200px">
+    </div>
+    <button type="submit" class="btn btn-sm">生成链接</button>
+  </form>
+  <div id="share-result" style="margin-top:12px;display:none">
+    <p>共享链接：<a id="share-url" href="#" target="_blank"></a></p>
+    <p style="font-size:0.85rem;color:var(--muted)">链接有效期 7 天。家属通过此链接可查看只读健康档案。</p>
+  </div>
 </div>
 
 <div class="card">
@@ -174,4 +191,21 @@
 })();
 </script>
 {{end}}
+<script>
+function createShareLink(e, pid) {
+  e.preventDefault();
+  var pc = document.getElementById('share-passcode').value;
+  fetch('/api/patient/' + pid + '/share', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({passcode: pc})
+  }).then(function(r){return r.json()}).then(function(d){
+    var el = document.getElementById('share-url');
+    el.href = d.url;
+    el.textContent = location.origin + d.url;
+    document.getElementById('share-result').style.display = 'block';
+  });
+  return false;
+}
+</script>
 {{end}}

@@ -2,6 +2,16 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+  <script>
+  (function(){
+    var h=document.documentElement;
+    var t=localStorage.getItem('theme');
+    if(t){h.setAttribute('data-theme',t)}
+    else if(matchMedia('(prefers-color-scheme:dark)').matches){h.setAttribute('data-theme','dark')}
+    var f=localStorage.getItem('font');
+    if(f){h.setAttribute('data-font',f)}
+  })();
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{template "title" .}} - 知愈 Nura</title>
@@ -12,7 +22,11 @@
   <header>
     <nav>
       <a href="/" class="brand">知愈 Nura</a>
-      <span class="version">v0.3</span>
+      <span class="version">v0.4</span>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button id="theme-toggle" class="btn btn-sm" title="切换深色模式">🌙</button>
+        <button id="font-toggle" class="btn btn-sm" title="切换大字体">字</button>
+      </span>
     </nav>
   </header>
   <main>
@@ -21,6 +35,29 @@
   <footer>
     <p>知愈 (Nura) — 本地健康数据中枢 · 不做诊断，不做处方 · 仅供健康参考</p>
   </footer>
+  <script>
+  (function(){
+    var h=document.documentElement;
+    var tb=document.getElementById('theme-toggle');
+    if(tb){tb.onclick=function(){
+      var c=h.getAttribute('data-theme');
+      var n=(c==='dark')?'light':'dark';
+      h.setAttribute('data-theme',n);
+      localStorage.setItem('theme',n);
+      tb.textContent=(n==='dark')?'☀️':'🌙';
+    };
+    tb.textContent=(h.getAttribute('data-theme')==='dark')?'☀️':'🌙';}
+    var fb=document.getElementById('font-toggle');
+    if(fb){fb.onclick=function(){
+      var c=h.getAttribute('data-font');
+      var n=(c==='large')?'normal':'large';
+      h.setAttribute('data-font',n);
+      localStorage.setItem('font',n);
+      fb.textContent=(n==='large')?'字-':'字+';
+    };
+    fb.textContent=(h.getAttribute('data-font')==='large')?'字-':'字+';}
+  })();
+  </script>
   {{block "scripts" .}}{{end}}
 </body>
 </html>

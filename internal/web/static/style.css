@@ -1,4 +1,4 @@
-/* Nura Phase 2a — minimal functional CSS */
+/* Nura — functional CSS */
 
 :root {
   --bg: #fafafa;
@@ -11,6 +11,34 @@
   --warning: #d97706;
   --success: #16a34a;
   --radius: 6px;
+  --hover: #f5f5f5;
+  --badge-danger-bg: #fef2f2;
+  --badge-warning-bg: #fffbeb;
+  --badge-success-bg: #f0fdf4;
+  --disclaimer-bg: #fffbeb;
+  --disclaimer-border: #fde68a;
+  --emergency-bg: #fef2f2;
+  --progress-bg: #e5e7eb;
+}
+
+[data-theme="dark"] {
+  --bg: #1a1a2e;
+  --card-bg: #16213e;
+  --text: #e0e0e0;
+  --muted: #a0a0b0;
+  --border: #2a2a4a;
+  --primary: #5b8def;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --success: #4ade80;
+  --hover: #1e2a4a;
+  --badge-danger-bg: #3b1a1a;
+  --badge-warning-bg: #3b3010;
+  --badge-success-bg: #1a3b1a;
+  --disclaimer-bg: #3b3010;
+  --disclaimer-border: #665520;
+  --emergency-bg: #3b1a1a;
+  --progress-bg: #2a2a4a;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -86,7 +114,7 @@ th, td {
 
 th { font-weight: 600; color: var(--muted); font-size: 0.8rem; }
 
-tr:hover { background: #f5f5f5; }
+tr:hover { background: var(--hover); }
 
 /* Buttons & Links */
 a { color: var(--primary); text-decoration: none; }
@@ -144,14 +172,14 @@ label {
   font-weight: 600;
 }
 
-.badge-danger { background: #fef2f2; color: var(--danger); }
-.badge-warning { background: #fffbeb; color: var(--warning); }
-.badge-success { background: #f0fdf4; color: var(--success); }
+.badge-danger { background: var(--badge-danger-bg); color: var(--danger); }
+.badge-warning { background: var(--badge-warning-bg); color: var(--warning); }
+.badge-success { background: var(--badge-success-bg); color: var(--success); }
 
 /* Disclaimer */
 .disclaimer {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--disclaimer-bg);
+  border: 1px solid var(--disclaimer-border);
   border-radius: var(--radius);
   padding: 12px;
   font-size: 0.85rem;
@@ -210,7 +238,7 @@ details summary {
 }
 
 .nav-links a:hover {
-  background: #f0f0f0;
+  background: var(--hover);
   text-decoration: none;
 }
 
@@ -316,7 +344,7 @@ details summary {
   cursor: pointer;
 }
 
-.pain-option:hover { background: #f0f0f0; }
+.pain-option:hover { background: var(--hover); }
 
 .pain-option input[type="radio"] { margin: 0; }
 
@@ -338,7 +366,7 @@ details summary {
 
 /* Emergency card */
 .emergency-card {
-  background: #fef2f2;
+  background: var(--emergency-bg);
   border: 2px solid var(--danger);
   border-radius: var(--radius);
   padding: 12px 16px;
@@ -350,11 +378,11 @@ details summary {
 .emergency-card p { margin-top: 4px; font-size: 0.9rem; }
 
 /* Emergency row in tables */
-.row-emergency { background: #fef2f2; }
+.row-emergency { background: var(--emergency-bg); }
 
 /* Progress bar */
 .progress-bar-container {
-  background: #e5e7eb;
+  background: var(--progress-bg);
   border-radius: 4px;
   height: 8px;
   margin: 8px 0 4px;
@@ -390,3 +418,15 @@ details summary {
 
 /* Nav-links wrap */
 .nav-links { flex-wrap: wrap; }
+
+/* Large font mode */
+[data-font="large"] body { font-size: 1.15rem; }
+[data-font="large"] .btn,
+[data-font="large"] input,
+[data-font="large"] textarea,
+[data-font="large"] select { font-size: 1rem; }
+[data-font="large"] table { font-size: 1rem; }
+[data-font="large"] .card h3 { font-size: 1rem; }
+[data-font="large"] .badge { font-size: 0.85rem; }
+[data-font="large"] .version { font-size: 0.9rem; }
+[data-font="large"] footer { font-size: 0.9rem; }

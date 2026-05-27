@@ -82,6 +82,10 @@ func (gw *Server) routes() {
 	api.POST("/trends/insight", gw.handleGenerateInsight)
 	api.GET("/reminders/pending", gw.handlePendingReminders)
 	api.POST("/reminders/:id/done", gw.handleMarkReminderDone)
+	api.GET("/patient/:id/summary/pdf", gw.handleSummaryPDF)
+	api.POST("/patient/:id/share", gw.handleCreateShareLink)
+	api.GET("/patient/:id/shares", gw.handleListShareLinks)
+	api.DELETE("/patient/:id/share/:share_id", gw.handleDeleteShareLink)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
@@ -93,6 +97,8 @@ func (gw *Server) routes() {
 	gw.engine.GET("/patient/:id/meals", gw.handleMealsPage)
 	gw.engine.GET("/patient/:id/medications", gw.handleMedicationsPage)
 	gw.engine.GET("/patient/:id/trends", gw.handleTrendsPage)
+	gw.engine.GET("/share/:token", gw.handleShareView)
+	gw.engine.POST("/share/:token/verify", gw.handleShareVerify)
 	gw.engine.StaticFS("/static", web.StaticFS())
 }
 

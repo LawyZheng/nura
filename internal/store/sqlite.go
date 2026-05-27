@@ -62,6 +62,7 @@ func (s *Store) migrate() error {
 		&model.AIInsight{},
 		&model.ChatMessage{},
 		&model.MedicationReminder{},
+		&model.ShareLink{},
 	)
 }
 
@@ -407,4 +408,28 @@ func (s *Store) MarkReminderDone(id int) error {
 
 func (s *Store) DeleteRemindersForMedication(medicationID int) error {
 	return s.db.Where("medication_id = ?", medicationID).Delete(&model.MedicationReminder{}).Error
+}
+
+func (s *Store) CreateShareLink(link *model.ShareLink) error {
+	return s.db.Create(link).Error
+}
+
+func (s *Store) GetShareLinkByToken(token string) (*model.ShareLink, error) {
+	var link model.ShareLink
+	if err := s.db.Where("token = ?", token).First(&link).Error; err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+func (s *Store) ListShareLinks(patientID int) ([]*model.ShareLink, error) {
+	var links []*model.ShareLink
+	if err := s.db.Where("patient_id = ?", patientID).Order("created_at DESC").Find(&links).Error; err != nil {
+		return nil, err
+	}
+	return links, nil
+}
+
+func (s *Store) DeactivateShareLink(id int) error {
+	return s.db.Model(&model.ShareLink{}).Where("id = ?", id).Update("is_active", false).Error
 }

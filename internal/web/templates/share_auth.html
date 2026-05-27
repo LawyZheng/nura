@@ -1,0 +1,16 @@
+{{define "title"}}访问验证{{end}}
+{{define "content"}}
+<div class="card" style="max-width:400px;margin:60px auto">
+  <h3>家属共享 — 请输入访问密码</h3>
+  {{if .Error}}
+  <p style="color:var(--danger);margin-bottom:8px">{{.Error}}</p>
+  {{end}}
+  <form method="POST" action="/share/{{.Token}}/verify">
+    <div class="form-group">
+      <label>4位访问密码</label>
+      <input type="password" name="passcode" maxlength="4" pattern="\d{4}" required autofocus>
+    </div>
+    <button type="submit" class="btn">验证</button>
+  </form>
+</div>
+{{end}}
