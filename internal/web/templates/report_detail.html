@@ -1,0 +1,57 @@
+{{define "title"}}{{reportTypeCN (printf "%s" .Report.ReportType)}}报告 {{.Report.ReportDate}}{{end}}
+{{define "content"}}
+<a href="/patient/{{.PatientID}}/reports" class="back">← 返回报告列表</a>
+<h1 class="page-title">{{reportTypeCN (printf "%s" .Report.ReportType)}}报告 — {{.Report.ReportDate}}</h1>
+
+{{if .Report.AISummary}}
+<div class="card">
+  <h3>AI 解读</h3>
+  <p>{{.Report.AISummary}}</p>
+  <div class="disclaimer">
+    ⚠️ 以上内容由 AI 自动生成，仅供健康参考，不构成医疗建议。如有疑问请咨询专业医生。
+  </div>
+</div>
+{{end}}
+
+{{if .Indicators}}
+<div class="card">
+  <h3>提取指标</h3>
+  <table>
+    <thead>
+      <tr><th>指标</th><th>值</th><th>参考范围</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      {{range .Indicators}}
+      <tr>
+        <td>{{if .IndicatorNameCN}}{{.IndicatorNameCN}}（{{.IndicatorName}}）{{else}}{{.IndicatorName}}{{end}}</td>
+        <td>{{.Value}} {{.Unit}}</td>
+        <td>{{if .ReferenceLow}}{{derefFloat .ReferenceLow}}{{end}}{{if and .ReferenceLow .ReferenceHigh}} - {{end}}{{if .ReferenceHigh}}{{derefFloat .ReferenceHigh}}{{end}}{{if or .ReferenceLow .ReferenceHigh}} {{.Unit}}{{end}}</td>
+        <td>
+          {{if .IsAbnormal}}
+            {{if eq .AbnormalDirection "high"}}<span class="badge badge-danger">偏高</span>
+            {{else if eq .AbnormalDirection "low"}}<span class="badge badge-warning">偏低</span>
+            {{else if eq .AbnormalDirection "positive"}}<span class="badge badge-danger">阳性</span>
+            {{else}}<span class="badge badge-danger">异常</span>
+            {{end}}
+          {{else}}
+            <span class="badge badge-success">正常</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="card">
+  <p style="color: var(--muted);">未提取到结构化指标。</p>
+</div>
+{{end}}
+
+<div class="card">
+  <details>
+    <summary>报告原文</summary>
+    <pre style="white-space: pre-wrap; margin-top: 8px; font-size: 0.85rem; line-height: 1.5;">{{.Report.RawText}}</pre>
+  </details>
+</div>
+{{end}}

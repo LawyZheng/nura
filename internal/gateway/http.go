@@ -13,6 +13,7 @@ import (
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
+	"github.com/LawyZheng/nura/internal/web"
 )
 
 func init() {
@@ -24,6 +25,7 @@ type Server struct {
 	agent    *runtime.AgentRuntime
 	pipeline *pipeline.Pipeline
 	traces   *runtime.TraceStore
+	store    *store.Store
 	engine   *gin.Engine
 	srv      *http.Server
 }
@@ -34,6 +36,7 @@ func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.
 		agent:    agent,
 		pipeline: pipeline.NewPipeline(llm, s),
 		traces:   agent.Traces(),
+		store:    s,
 		engine:   gin.New(),
 	}
 	gw.engine.Use(gin.Recovery())
@@ -48,6 +51,21 @@ func (gw *Server) routes() {
 	gw.engine.POST("/agent/run", gw.handleAgentRun)
 	gw.engine.POST("/agent/report/ingest", gw.handleReportIngest)
 	gw.engine.GET("/agent/debug/trace/:trace_id", gw.handleTrace)
+
+	api := gw.engine.Group("/api")
+	api.GET("/reports", gw.handleListReports)
+	api.GET("/reports/:id", gw.handleGetReport)
+	api.GET("/patient/:id", gw.handleGetPatient)
+	api.POST("/patient", gw.handleCreatePatient)
+	api.PUT("/patient/:id", gw.handleUpdatePatient)
+	api.GET("/indicators", gw.handleListIndicators)
+
+	// Web UI
+	gw.engine.GET("/", gw.handleIndex)
+	gw.engine.GET("/patient/:id", gw.handleDashboard)
+	gw.engine.GET("/patient/:id/reports", gw.handleReportList)
+	gw.engine.GET("/patient/:id/reports/:report_id", gw.handleReportDetail)
+	gw.engine.StaticFS("/static", web.StaticFS())
 }
 
 // ListenAndServe starts the HTTP server.

@@ -38,23 +38,23 @@ func newTestPipeline(t *testing.T) (*Pipeline, *store.Store) {
 				facts := map[string]any{
 					"indicators": []map[string]any{
 						{
-							"name":           "ulcer_stage",
-							"name_cn":        "溃疡分期",
-							"value":          "A2",
-							"is_abnormal":    true,
+							"name":        "ulcer_stage",
+							"name_cn":     "溃疡分期",
+							"value":       "A2",
+							"is_abnormal": true,
 						},
 						{
-							"name":           "ulcer_size",
-							"name_cn":        "溃疡大小",
-							"value":          "0.8x0.6",
-							"unit":           "cm",
-							"is_abnormal":    false,
+							"name":        "ulcer_size",
+							"name_cn":     "溃疡大小",
+							"value":       "0.8x0.6",
+							"unit":        "cm",
+							"is_abnormal": false,
 						},
 						{
-							"name":           "hp_status",
-							"name_cn":        "幽门螺杆菌",
-							"value":          "阳性",
-							"is_abnormal":    true,
+							"name":        "hp_status",
+							"name_cn":     "幽门螺杆菌",
+							"value":       "阳性",
+							"is_abnormal": true,
 						},
 					},
 				}
@@ -111,8 +111,8 @@ func TestPipeline_GastroscopyReport(t *testing.T) {
 		t.Error("expected non-empty explanation")
 	}
 
-	if len(result.Stages) != 5 {
-		t.Errorf("expected 5 stages, got %d", len(result.Stages))
+	if len(result.Stages) != 6 {
+		t.Errorf("expected 6 stages, got %d", len(result.Stages))
 	}
 
 	// Check stored report is scoped to patient.
@@ -140,6 +140,7 @@ func TestPipeline_StageNames(t *testing.T) {
 		"normalize_indicators",
 		"merge_state",
 		"generate_explanation",
+		"update_memory",
 	}
 	for i, expected := range expectedStages {
 		if i >= len(result.Stages) {
@@ -171,7 +172,7 @@ func TestPipeline_WithSyntheticSample(t *testing.T) {
 		t.Error("expected non-empty report type")
 	}
 
-	if len(result.Stages) != 5 {
-		t.Errorf("expected 5 pipeline stages, got %d", len(result.Stages))
+	if len(result.Stages) != 6 {
+		t.Errorf("expected 6 pipeline stages, got %d", len(result.Stages))
 	}
 }

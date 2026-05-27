@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/LawyZheng/nura/internal/memory"
 	"github.com/LawyZheng/nura/internal/model"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/store"
@@ -20,25 +21,26 @@ type StageResult struct {
 
 // IngestionResult is the final output of the report ingestion pipeline.
 type IngestionResult struct {
-	ReportType           model.ReportType        `json:"report_type"`
-	ExtractedFacts       map[string]any          `json:"extracted_facts"`
+	ReportType           model.ReportType          `json:"report_type"`
+	ExtractedFacts       map[string]any            `json:"extracted_facts"`
 	NormalizedIndicators []*model.MedicalIndicator `json:"normalized_indicators"`
-	MergeActions         []string                `json:"merge_actions,omitempty"`
-	PatientStateUpdates  []string                `json:"patient_state_updates,omitempty"`
-	MissingFields        []string                `json:"missing_or_uncertain_fields,omitempty"`
-	Explanation          string                  `json:"user_facing_explanation"`
-	Stages               []StageResult           `json:"stages"`
+	MergeActions         []string                  `json:"merge_actions,omitempty"`
+	PatientStateUpdates  []string                  `json:"patient_state_updates,omitempty"`
+	MissingFields        []string                  `json:"missing_or_uncertain_fields,omitempty"`
+	Explanation          string                    `json:"user_facing_explanation"`
+	Stages               []StageResult             `json:"stages"`
 }
 
 // Pipeline processes raw report text through classification, extraction,
 // normalization, merge, and explanation stages.
 type Pipeline struct {
-	llm   providers.LLMProvider
-	store *store.Store
+	llm     providers.LLMProvider
+	store   *store.Store
+	updater *memory.Updater
 }
 
 func NewPipeline(llm providers.LLMProvider, s *store.Store) *Pipeline {
-	return &Pipeline{llm: llm, store: s}
+	return &Pipeline{llm: llm, store: s, updater: memory.NewUpdater(llm, s)}
 }
 
 // Run executes the full ingestion pipeline on a raw report for the given patient.
@@ -85,6 +87,15 @@ func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate s
 	result.Explanation = explanation
 	result.MissingFields = missingFields
 	result.Stages = append(result.Stages, explainResult)
+
+	// Stage 6: Update memory.
+	memoryResult := StageResult{StageName: "update_memory"}
+	if err := p.updater.AfterIngestion(patientID); err != nil {
+		memoryResult.Error = err.Error()
+	} else {
+		memoryResult.Data = map[string]any{"status": "updated"}
+	}
+	result.Stages = append(result.Stages, memoryResult)
 
 	return result, nil
 }
@@ -165,13 +176,13 @@ func (p *Pipeline) normalizeIndicators(facts map[string]any, reportType model.Re
 		}
 
 		ind := &model.MedicalIndicator{
-			Category:      category,
-			IndicatorName: getString(m, "name"),
+			Category:        category,
+			IndicatorName:   getString(m, "name"),
 			IndicatorNameCN: getString(m, "name_cn"),
-			Value:         getString(m, "value"),
-			Unit:          getString(m, "unit"),
-			IsAbnormal:    getBool(m, "is_abnormal"),
-			MeasuredAt:    reportDate,
+			Value:           getString(m, "value"),
+			Unit:            getString(m, "unit"),
+			IsAbnormal:      getBool(m, "is_abnormal"),
+			MeasuredAt:      reportDate,
 		}
 
 		if v, ok := getFloat(m, "reference_low"); ok {

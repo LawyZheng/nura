@@ -1,0 +1,168 @@
+{{define "title"}}{{.Profile.Name}}的健康档案{{end}}
+{{define "content"}}
+<a href="/" class="back">← 返回患者列表</a>
+<h1 class="page-title">{{.Profile.Name}}的健康档案</h1>
+
+<div class="card">
+  <h3>基本信息</h3>
+  <ul class="item-list">
+    {{if .Profile.Name}}<li>姓名：{{.Profile.Name}}</li>{{end}}
+    {{if .Profile.Gender}}<li>性别：{{if eq .Profile.Gender "male"}}男{{else if eq .Profile.Gender "female"}}女{{else}}{{.Profile.Gender}}{{end}}</li>{{end}}
+    {{if .Profile.BirthDate}}<li>出生日期：{{.Profile.BirthDate}}</li>{{end}}
+    {{if .Profile.Allergies}}<li>过敏史：{{range $i, $a := .Profile.Allergies}}{{if $i}}、{{end}}{{$a}}{{end}}</li>{{end}}
+  </ul>
+</div>
+
+{{if .Meds}}
+<div class="card">
+  <h3>当前用药</h3>
+  <ul class="item-list">
+    {{range .Meds}}
+    <li>{{.Name}} {{.Dosage}} {{.Frequency}}{{if .CourseEnd}}（至 {{.CourseEnd}}）{{end}}</li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .Diagnoses}}
+<div class="card">
+  <h3>诊断历史</h3>
+  <ul class="item-list">
+    {{range .Diagnoses}}
+    <li>{{.DiagnosisDate}} — {{.Condition}}{{if .Note}}（{{.Note}}）{{end}}</li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .Reports}}
+<div class="card">
+  <h3>近期报告</h3>
+  <table>
+    <thead>
+      <tr><th>日期</th><th>类型</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {{range .Reports}}
+      <tr>
+        <td>{{.ReportDate}}</td>
+        <td>{{reportTypeCN (printf "%s" .ReportType)}}</td>
+        <td>{{if .IsProcessed}}<span class="badge badge-success">已处理</span>{{else}}<span class="badge badge-warning">待处理</span>{{end}}</td>
+        <td><a href="/patient/{{$.PatientID}}/reports/{{.ID}}">查看 →</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  <p style="margin-top: 8px;"><a href="/patient/{{.PatientID}}/reports">查看全部报告 →</a></p>
+</div>
+{{end}}
+
+<div class="card">
+  <h3>关键指标趋势</h3>
+  {{if .Abnormals}}
+  <table>
+    <thead>
+      <tr><th>指标</th><th>值</th><th>参考范围</th><th>日期</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      {{range .Abnormals}}
+      <tr>
+        <td>{{if .IndicatorNameCN}}{{.IndicatorNameCN}}{{else}}{{.IndicatorName}}{{end}}</td>
+        <td>{{.Value}} {{.Unit}}</td>
+        <td>{{if .ReferenceLow}}{{derefFloat .ReferenceLow}}{{end}}{{if and .ReferenceLow .ReferenceHigh}} - {{end}}{{if .ReferenceHigh}}{{derefFloat .ReferenceHigh}}{{end}} {{.Unit}}</td>
+        <td>{{.MeasuredAt}}</td>
+        <td>
+          {{if eq .AbnormalDirection "high"}}<span class="badge badge-danger">偏高</span>
+          {{else if eq .AbnormalDirection "low"}}<span class="badge badge-warning">偏低</span>
+          {{else if eq .AbnormalDirection "positive"}}<span class="badge badge-danger">阳性</span>
+          {{else}}<span class="badge badge-danger">异常</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  <div style="margin-top: 16px;">
+    <canvas id="indicatorChart" height="200"></canvas>
+  </div>
+  {{else}}
+  <p style="color: var(--muted);">暂无异常指标记录。</p>
+  {{end}}
+</div>
+
+{{if .Summaries}}
+<div class="card">
+  <h3>AI 记忆摘要</h3>
+  {{range .Summaries}}
+  <div style="margin-bottom: 8px;">
+    <strong>[{{.Category}}]</strong>
+    <p>{{.Content}}</p>
+  </div>
+  {{end}}
+  <div class="disclaimer">
+    ⚠️ 以上内容由 AI 自动生成，仅供健康参考，不构成医疗建议。如有疑问请咨询专业医生。
+  </div>
+</div>
+{{end}}
+
+{{end}}
+
+{{define "head"}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{{end}}
+
+{{define "scripts"}}
+{{if .Abnormals}}
+<script>
+(function() {
+  var abnormals = [
+    {{range .Abnormals}}
+    {name: "{{if .IndicatorNameCN}}{{.IndicatorNameCN}}{{else}}{{.IndicatorName}}{{end}}", value: "{{.Value}}", date: "{{.MeasuredAt}}", direction: "{{.AbnormalDirection}}"},
+    {{end}}
+  ];
+
+  // Group by indicator name for chart
+  var groups = {};
+  abnormals.forEach(function(a) {
+    if (!groups[a.name]) groups[a.name] = [];
+    groups[a.name].push(a);
+  });
+
+  var datasets = [];
+  var allDates = [];
+  var colors = ['#dc2626','#d97706','#2563eb','#16a34a','#7c3aed','#db2777'];
+  var i = 0;
+  for (var name in groups) {
+    var points = groups[name].map(function(p) {
+      allDates.push(p.date);
+      var v = parseFloat(p.value);
+      return {x: p.date, y: isNaN(v) ? 1 : v};
+    });
+    datasets.push({
+      label: name,
+      data: points,
+      borderColor: colors[i % colors.length],
+      tension: 0.3,
+      pointRadius: 5
+    });
+    i++;
+  }
+
+  if (datasets.length > 0 && datasets.some(function(d) { return d.data.some(function(p) { return !isNaN(p.y); }); })) {
+    new Chart(document.getElementById('indicatorChart'), {
+      type: 'line',
+      data: {datasets: datasets},
+      options: {
+        responsive: true,
+        scales: {
+          x: {type: 'category', title: {display: true, text: '日期'}},
+          y: {title: {display: true, text: '值'}}
+        },
+        plugins: {legend: {position: 'bottom'}}
+      }
+    });
+  }
+})();
+</script>
+{{end}}
+{{end}}

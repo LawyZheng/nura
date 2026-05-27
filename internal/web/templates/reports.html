@@ -1,0 +1,94 @@
+{{define "title"}}{{.Profile.Name}}的检查报告{{end}}
+{{define "content"}}
+<a href="/patient/{{.PatientID}}" class="back">← 返回健康档案</a>
+<h1 class="page-title">{{.Profile.Name}}的检查报告</h1>
+
+<div class="card">
+  <h3>上传新报告</h3>
+  <form id="upload-form">
+    <div class="form-group">
+      <label for="raw_text">报告原文（粘贴文本）</label>
+      <textarea id="raw_text" name="raw_text" placeholder="将检查报告文本粘贴到此处..." required></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="report_date">报告日期</label>
+        <input type="date" id="report_date" name="report_date" required>
+      </div>
+      <div class="form-group">
+        <label for="source_type">来源</label>
+        <select id="source_type" name="source_type">
+          <option value="text">文本粘贴</option>
+          <option value="photo">拍照识别</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn" id="submit-btn">提交解析</button>
+    <span id="upload-status" style="margin-left: 12px; color: var(--muted);"></span>
+  </form>
+</div>
+
+{{if .Reports}}
+<div class="card">
+  <h3>报告列表</h3>
+  <table>
+    <thead>
+      <tr><th>日期</th><th>类型</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {{range .Reports}}
+      <tr>
+        <td>{{.ReportDate}}</td>
+        <td>{{reportTypeCN (printf "%s" .ReportType)}}</td>
+        <td>{{if .IsProcessed}}<span class="badge badge-success">已处理</span>{{else}}<span class="badge badge-warning">待处理</span>{{end}}</td>
+        <td><a href="/patient/{{$.PatientID}}/reports/{{.ID}}">查看详情 →</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="card">
+  <p style="color: var(--muted);">暂无报告记录。请通过上方表单上传。</p>
+</div>
+{{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.getElementById('upload-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('submit-btn');
+  var status = document.getElementById('upload-status');
+  btn.disabled = true;
+  status.textContent = '正在解析报告...';
+
+  var data = {
+    raw_text: document.getElementById('raw_text').value,
+    report_date: document.getElementById('report_date').value,
+    source_type: document.getElementById('source_type').value,
+    patient_id: {{.PatientID}}
+  };
+
+  try {
+    var resp = await fetch('/agent/report/ingest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    if (resp.ok) {
+      status.textContent = '解析完成，正在跳转...';
+      window.location.reload();
+    } else {
+      var err = await resp.json();
+      status.textContent = '解析失败: ' + (err.error || '未知错误');
+      btn.disabled = false;
+    }
+  } catch (e) {
+    status.textContent = '网络错误: ' + e.message;
+    btn.disabled = false;
+  }
+});
+</script>
+{{end}}

@@ -1,13 +1,34 @@
 package memory
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/LawyZheng/nura/internal/model"
+	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/store"
 )
+
+type mockLLMProvider struct {
+	response string
+}
+
+func (m *mockLLMProvider) Complete(_ context.Context, _ providers.CompletionRequest) (*providers.CompletionResponse, error) {
+	return &providers.CompletionResponse{Content: m.response}, nil
+}
+
+func (m *mockLLMProvider) CompleteStream(_ context.Context, _ providers.CompletionRequest) (<-chan providers.StreamChunk, error) {
+	ch := make(chan providers.StreamChunk, 1)
+	ch <- providers.StreamChunk{Done: true}
+	close(ch)
+	return ch, nil
+}
+
+func (m *mockLLMProvider) CompleteWithVision(_ context.Context, _ providers.VisionRequest) (*providers.CompletionResponse, error) {
+	return &providers.CompletionResponse{Content: m.response}, nil
+}
 
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
@@ -196,6 +217,71 @@ func TestContextBuilder_Build(t *testing.T) {
 	}
 	if ctx.PatientSummary == "" {
 		t.Error("expected patient summary even for generic hint")
+	}
+}
+
+func TestUpdater_AfterIngestion(t *testing.T) {
+	s := newTestStore(t)
+	pid := seedTestData(t, s)
+
+	mock := &mockLLMProvider{
+		response: "Synthetic AI-generated patient summary for testing",
+	}
+	updater := NewUpdater(mock, s)
+
+	err := updater.AfterIngestion(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	summaries, err := s.GetActiveMemorySummaries(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, ms := range summaries {
+		if ms.Category == "report_summary" {
+			found = true
+			if ms.Content == "" {
+				t.Error("expected non-empty summary content")
+			}
+		}
+	}
+	if !found {
+		t.Error("expected a report_summary memory after ingestion")
+	}
+}
+
+func TestUpdater_SupersedesOldSummary(t *testing.T) {
+	s := newTestStore(t)
+	pid := seedTestData(t, s)
+
+	mock := &mockLLMProvider{response: "First summary"}
+	updater := NewUpdater(mock, s)
+
+	if err := updater.AfterIngestion(pid); err != nil {
+		t.Fatal(err)
+	}
+
+	mock.response = "Updated summary after second report"
+	if err := updater.AfterIngestion(pid); err != nil {
+		t.Fatal(err)
+	}
+
+	active, err := s.GetActiveMemorySummaries(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := 0
+	for _, ms := range active {
+		if ms.Category == "report_summary" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 active report_summary, got %d", count)
 	}
 }
 

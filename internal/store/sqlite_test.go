@@ -347,6 +347,214 @@ func TestStore_AIInsight(t *testing.T) {
 	}
 }
 
+func TestStore_ListPatientProfiles(t *testing.T) {
+	s := newTestStore(t)
+
+	profiles, err := s.ListPatientProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 0 {
+		t.Errorf("expected 0 profiles, got %d", len(profiles))
+	}
+
+	s.CreatePatientProfile(&model.PatientProfile{Name: "Alice"})
+	s.CreatePatientProfile(&model.PatientProfile{Name: "Bob"})
+
+	profiles, err = s.ListPatientProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 2 {
+		t.Fatalf("expected 2 profiles, got %d", len(profiles))
+	}
+}
+
+func TestStore_GetIndicatorsByCategory(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	rid1, _ := s.InsertHealthReport(&model.HealthReport{
+		PatientID: pid, ReportType: model.ReportBloodRoutine,
+		ReportDate: "2024-03-01", RawText: "blood test",
+	})
+	rid2, _ := s.InsertHealthReport(&model.HealthReport{
+		PatientID: pid, ReportType: model.ReportGastroscopy,
+		ReportDate: "2024-03-01", RawText: "gastroscopy",
+	})
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid, ReportID: rid1, Category: "blood",
+		IndicatorName: "WBC", Value: "4.5", Unit: "×10⁹/L", MeasuredAt: "2024-03-01",
+	})
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid, ReportID: rid1, Category: "blood",
+		IndicatorName: "RBC", Value: "4.2", Unit: "×10¹²/L", MeasuredAt: "2024-03-01",
+	})
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid, ReportID: rid2, Category: "gastroscopy",
+		IndicatorName: "HP_status", Value: "阳性", MeasuredAt: "2024-03-01",
+	})
+
+	blood, err := s.GetIndicatorsByCategory(pid, "blood")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blood) != 2 {
+		t.Errorf("expected 2 blood indicators, got %d", len(blood))
+	}
+
+	gastro, err := s.GetIndicatorsByCategory(pid, "gastroscopy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gastro) != 1 {
+		t.Errorf("expected 1 gastroscopy indicator, got %d", len(gastro))
+	}
+
+	empty, err := s.GetIndicatorsByCategory(pid, "nonexistent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("expected 0 indicators for nonexistent category, got %d", len(empty))
+	}
+}
+
+func TestStore_GetAbnormalIndicators(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	rid, _ := s.InsertHealthReport(&model.HealthReport{
+		PatientID: pid, ReportType: model.ReportBloodRoutine,
+		ReportDate: "2024-03-01", RawText: "blood test",
+	})
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid, ReportID: rid, Category: "blood",
+		IndicatorName: "WBC", Value: "3.2", Unit: "×10⁹/L",
+		IsAbnormal: true, AbnormalDirection: "low", MeasuredAt: "2024-03-01",
+	})
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid, ReportID: rid, Category: "blood",
+		IndicatorName: "RBC", Value: "4.5", Unit: "×10¹²/L",
+		IsAbnormal: false, MeasuredAt: "2024-03-01",
+	})
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid, ReportID: rid, Category: "blood",
+		IndicatorName: "PLT", Value: "380", Unit: "×10⁹/L",
+		IsAbnormal: true, AbnormalDirection: "high", MeasuredAt: "2024-03-01",
+	})
+
+	abnormals, err := s.GetAbnormalIndicators(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(abnormals) != 2 {
+		t.Fatalf("expected 2 abnormal indicators, got %d", len(abnormals))
+	}
+	for _, ind := range abnormals {
+		if !ind.IsAbnormal {
+			t.Errorf("indicator %s should be abnormal", ind.IndicatorName)
+		}
+	}
+}
+
+func TestStore_GetAbnormalIndicators_Isolation(t *testing.T) {
+	s := newTestStore(t)
+	pid1 := createTestPatient(t, s)
+	pid2, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Patient B"})
+
+	rid1, _ := s.InsertHealthReport(&model.HealthReport{
+		PatientID: pid1, ReportType: model.ReportBloodRoutine,
+		ReportDate: "2024-03-01", RawText: "p1 blood",
+	})
+	rid2, _ := s.InsertHealthReport(&model.HealthReport{
+		PatientID: pid2, ReportType: model.ReportBloodRoutine,
+		ReportDate: "2024-03-01", RawText: "p2 blood",
+	})
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid1, ReportID: rid1, Category: "blood",
+		IndicatorName: "WBC", Value: "3.2", IsAbnormal: true, MeasuredAt: "2024-03-01",
+	})
+	s.InsertIndicator(&model.MedicalIndicator{
+		PatientID: pid2, ReportID: rid2, Category: "blood",
+		IndicatorName: "WBC", Value: "2.8", IsAbnormal: true, MeasuredAt: "2024-03-01",
+	})
+
+	p1Abnormals, _ := s.GetAbnormalIndicators(pid1)
+	p2Abnormals, _ := s.GetAbnormalIndicators(pid2)
+
+	if len(p1Abnormals) != 1 || len(p2Abnormals) != 1 {
+		t.Errorf("expected 1 each, got %d and %d", len(p1Abnormals), len(p2Abnormals))
+	}
+}
+
+func TestStore_ListRecentReports(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertHealthReport(&model.HealthReport{PatientID: pid, ReportType: model.ReportBloodRoutine, ReportDate: "2024-01-01", RawText: "r1"})
+	s.InsertHealthReport(&model.HealthReport{PatientID: pid, ReportType: model.ReportGastroscopy, ReportDate: "2024-02-01", RawText: "r2"})
+	s.InsertHealthReport(&model.HealthReport{PatientID: pid, ReportType: model.ReportHPBreath, ReportDate: "2024-03-01", RawText: "r3"})
+	s.InsertHealthReport(&model.HealthReport{PatientID: pid, ReportType: model.ReportLiverFunction, ReportDate: "2024-04-01", RawText: "r4"})
+
+	recent, err := s.ListRecentReports(pid, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("expected 2 recent reports, got %d", len(recent))
+	}
+	if recent[0].ReportDate != "2024-04-01" {
+		t.Errorf("first report date = %q, want 2024-04-01", recent[0].ReportDate)
+	}
+	if recent[1].ReportDate != "2024-03-01" {
+		t.Errorf("second report date = %q, want 2024-03-01", recent[1].ReportDate)
+	}
+
+	all, err := s.ListRecentReports(pid, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 4 {
+		t.Errorf("expected 4 reports with limit 10, got %d", len(all))
+	}
+}
+
+func TestStore_SupersedeMemorySummary(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	oldID, _ := s.InsertMemorySummary(&model.MemorySummary{
+		PatientID: pid, Category: "overall", Content: "old summary",
+	})
+	newID, _ := s.InsertMemorySummary(&model.MemorySummary{
+		PatientID: pid, Category: "overall", Content: "new summary",
+	})
+
+	err := s.SupersedeMemorySummary(oldID, newID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	active, err := s.GetActiveMemorySummaries(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 1 {
+		t.Fatalf("expected 1 active summary after supersede, got %d", len(active))
+	}
+	if active[0].ID != newID {
+		t.Errorf("active summary id = %d, want %d", active[0].ID, newID)
+	}
+}
+
 func TestStore_NewWithInvalidPath(t *testing.T) {
 	_, err := New("/dev/null/nonexistent/impossible/test.db")
 	if err == nil {
