@@ -17,6 +17,14 @@ var staticFS embed.FS
 
 var funcMap = template.FuncMap{
 	"reportTypeCN": reportTypeCN,
+	"derefFloat":   derefFloat,
+}
+
+func derefFloat(f *float64) string {
+	if f == nil {
+		return ""
+	}
+	return fmt.Sprintf("%.1f", *f)
 }
 
 // pages maps page name → parsed template (layout + page).

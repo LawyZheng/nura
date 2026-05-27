@@ -460,6 +460,44 @@ func TestWeb_Index_Empty(t *testing.T) {
 	}
 }
 
+func TestWeb_Dashboard(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "健康档案") {
+		t.Error("expected page to contain '健康档案'")
+	}
+	if !strings.Contains(body, "Test Patient") {
+		t.Error("expected page to contain patient name")
+	}
+	if !strings.Contains(body, "Omeprazole") {
+		t.Error("expected page to contain medication")
+	}
+	if !strings.Contains(body, "duodenal_ulcer") {
+		t.Error("expected page to contain diagnosis")
+	}
+}
+
+func TestWeb_Dashboard_NotFound(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", "/patient/999", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
 func TestAPI_UpdatePatient(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
