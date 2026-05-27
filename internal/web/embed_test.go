@@ -18,4 +18,7 @@ func TestLayout_ContainsThemeToggle(t *testing.T) {
 	if !strings.Contains(html, `id="theme-toggle"`) {
 		t.Error("layout missing theme-toggle button")
 	}
+	if !strings.Contains(html, `id="font-toggle"`) {
+		t.Error("layout missing font-toggle button")
+	}
 }

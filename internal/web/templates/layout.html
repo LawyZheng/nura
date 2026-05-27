@@ -8,6 +8,8 @@
     var t=localStorage.getItem('theme');
     if(t){h.setAttribute('data-theme',t)}
     else if(matchMedia('(prefers-color-scheme:dark)').matches){h.setAttribute('data-theme','dark')}
+    var f=localStorage.getItem('font');
+    if(f){h.setAttribute('data-font',f)}
   })();
   </script>
   <meta charset="UTF-8">
@@ -23,6 +25,7 @@
       <span class="version">v0.3</span>
       <span style="margin-left:auto;display:flex;gap:6px">
         <button id="theme-toggle" class="btn btn-sm" title="切换深色模式">🌙</button>
+        <button id="font-toggle" class="btn btn-sm" title="切换大字体">字</button>
       </span>
     </nav>
   </header>
@@ -44,6 +47,15 @@
       tb.textContent=(n==='dark')?'☀️':'🌙';
     };
     tb.textContent=(h.getAttribute('data-theme')==='dark')?'☀️':'🌙';}
+    var fb=document.getElementById('font-toggle');
+    if(fb){fb.onclick=function(){
+      var c=h.getAttribute('data-font');
+      var n=(c==='large')?'normal':'large';
+      h.setAttribute('data-font',n);
+      localStorage.setItem('font',n);
+      fb.textContent=(n==='large')?'字-':'字+';
+    };
+    fb.textContent=(h.getAttribute('data-font')==='large')?'字-':'字+';}
   })();
   </script>
   {{block "scripts" .}}{{end}}

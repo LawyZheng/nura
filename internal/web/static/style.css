@@ -418,3 +418,15 @@ details summary {
 
 /* Nav-links wrap */
 .nav-links { flex-wrap: wrap; }
+
+/* Large font mode */
+[data-font="large"] body { font-size: 1.15rem; }
+[data-font="large"] .btn,
+[data-font="large"] input,
+[data-font="large"] textarea,
+[data-font="large"] select { font-size: 1rem; }
+[data-font="large"] table { font-size: 1rem; }
+[data-font="large"] .card h3 { font-size: 1rem; }
+[data-font="large"] .badge { font-size: 0.85rem; }
+[data-font="large"] .version { font-size: 0.9rem; }
+[data-font="large"] footer { font-size: 0.9rem; }
