@@ -1090,3 +1090,69 @@ func TestWeb_MedicationsPage(t *testing.T) {
 		t.Error("expected page title '用药管理'")
 	}
 }
+
+// --- T5: Trend visualization tests ---
+
+func TestAPI_GetTrends(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	ps := 6
+	s.InsertSymptomLog(&model.SymptomLog{
+		PatientID: pid, PainScore: &ps, PainLocation: "upper_abdomen",
+		RecordedAt: time.Now(),
+	})
+	s.InsertMealLog(&model.MealLog{
+		PatientID: pid, MealType: "lunch", Content: "synthetic spicy food",
+		HasIrritant: true, IrritantDetail: "spicy",
+		RecordedAt: time.Now(),
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/trends?patient_id=%d&days=7", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	for _, field := range []string{"symptoms", "meals", "medications", "period"} {
+		if _, ok := resp[field]; !ok {
+			t.Errorf("missing field %q", field)
+		}
+	}
+}
+
+func TestAPI_GetTrends_MissingPatientID(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", "/api/trends", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestWeb_TrendsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/trends", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "趋势分析") {
+		t.Error("expected page title '趋势分析'")
+	}
+	if !strings.Contains(body, "chart.js") || !strings.Contains(body, "Chart") {
+		t.Error("expected Chart.js reference")
+	}
+}
