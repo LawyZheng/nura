@@ -3,6 +3,11 @@
 <a href="/" class="back">← 返回患者列表</a>
 <h1 class="page-title">{{.Profile.Name}}的健康档案</h1>
 
+<div class="nav-links">
+  <a href="/patient/{{.PatientID}}/reports">检查报告</a>
+  <a href="/patient/{{.PatientID}}/chat">AI 对话</a>
+</div>
+
 <div class="card">
   <h3>基本信息</h3>
   <ul class="item-list">
