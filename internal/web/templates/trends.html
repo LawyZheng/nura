@@ -1,0 +1,163 @@
+{{define "title"}}趋势分析{{end}}
+
+{{define "head"}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <a href="/patient/{{.PatientID}}" class="back-link">&larr; 返回健康档案</a>
+  <h1>趋势分析 &middot; {{.Profile.Name}}</h1>
+</div>
+
+<div class="card">
+  <div class="trend-range-buttons">
+    <button class="btn btn-sm trend-btn" data-days="7" id="btn-7d">7 天</button>
+    <button class="btn btn-sm trend-btn" data-days="14" id="btn-14d">14 天</button>
+    <button class="btn btn-sm trend-btn" data-days="30" id="btn-30d">30 天</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>症状评分趋势</h3>
+  <canvas id="symptomChart" height="250"></canvas>
+</div>
+
+<div class="card">
+  <h3>刺激性饮食统计</h3>
+  <canvas id="dietChart" height="200"></canvas>
+</div>
+
+<div class="card" id="insight-card">
+  <h3>AI 趋势洞察</h3>
+  <div id="insight-content">
+    {{if .Insight}}
+    <p style="white-space: pre-wrap;">{{.Insight.Content}}</p>
+    {{else}}
+    <p style="color: var(--muted);">暂无洞察，点击下方按钮生成。</p>
+    {{end}}
+  </div>
+  <button class="btn btn-sm" onclick="generateInsight()" id="insight-btn" style="margin-top: 8px;">&#x1F504; 生成/刷新洞察</button>
+  <div class="disclaimer" style="margin-top: 8px;">
+    &#x26A0;&#xFE0F; 以上内容由 AI 自动生成，仅供健康参考，不构成医疗建议。如有疑问请咨询专业医生。
+  </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+var patientID = {{.PatientID}};
+var symptomChart = null, dietChart = null;
+var activeDays = 7;
+
+function loadTrends(days) {
+  activeDays = days;
+  document.querySelectorAll('.trend-btn').forEach(function(b) {
+    b.style.opacity = b.dataset.days == days ? '1' : '0.5';
+  });
+
+  fetch('/api/trends?patient_id=' + patientID + '&days=' + days)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      renderSymptomChart(data.symptoms, data.meals, data.medications);
+      renderDietChart(data.meals);
+    });
+}
+
+function renderSymptomChart(symptoms, meals, medications) {
+  var ctx = document.getElementById('symptomChart').getContext('2d');
+  if (symptomChart) symptomChart.destroy();
+
+  var symptomPoints = symptoms.filter(function(s) { return s.pain_score !== null; }).map(function(s) {
+    return {x: s.recorded_at.substring(0, 10), y: s.pain_score};
+  });
+
+  var irritantPoints = meals.filter(function(m) { return m.has_irritant; }).map(function(m) {
+    return {x: m.recorded_at.substring(0, 10), y: 0.5};
+  });
+
+  var datasets = [
+    {label: '疼痛评分', data: symptomPoints, borderColor: '#dc2626', tension: 0.3, pointRadius: 5, type: 'line'},
+    {label: '刺激性饮食', data: irritantPoints, backgroundColor: '#d97706', pointRadius: 8, pointStyle: 'triangle', showLine: false, type: 'scatter'}
+  ];
+
+  symptomChart = new Chart(ctx, {
+    type: 'line',
+    data: {datasets: datasets},
+    options: {
+      responsive: true,
+      scales: {
+        x: {type: 'category', title: {display: true, text: '日期'}},
+        y: {min: 0, max: 10, title: {display: true, text: '疼痛评分'}}
+      },
+      plugins: {legend: {position: 'bottom'}}
+    }
+  });
+}
+
+function renderDietChart(meals) {
+  var ctx = document.getElementById('dietChart').getContext('2d');
+  if (dietChart) dietChart.destroy();
+
+  var tagMap = {'spicy': '辣', 'oily': '油腻', 'cold': '生冷', 'alcohol': '酒精', 'coffee': '咖啡', 'strong_tea': '浓茶', 'carbonated': '碳酸'};
+  var counts = {};
+  meals.forEach(function(m) {
+    if (m.irritant_detail) {
+      m.irritant_detail.split(',').forEach(function(tag) {
+        tag = tag.trim();
+        if (tag) counts[tag] = (counts[tag] || 0) + 1;
+      });
+    }
+  });
+
+  var labels = Object.keys(counts).map(function(k) { return tagMap[k] || k; });
+  var values = Object.values(counts);
+
+  dietChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{label: '次数', data: values, backgroundColor: '#d97706'}]
+    },
+    options: {
+      responsive: true,
+      scales: {y: {beginAtZero: true, ticks: {stepSize: 1}}},
+      plugins: {legend: {display: false}}
+    }
+  });
+}
+
+function generateInsight() {
+  var btn = document.getElementById('insight-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+
+  fetch('/api/trends/insight', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({patient_id: patientID, days: activeDays})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.insight) {
+      document.getElementById('insight-content').innerHTML = '<p style="white-space:pre-wrap;">' + data.insight.content + '</p>';
+    } else if (data.error) {
+      document.getElementById('insight-content').innerHTML = '<p style="color:var(--danger);">生成失败：' + data.error + '</p>';
+    }
+  })
+  .catch(function() {
+    document.getElementById('insight-content').innerHTML = '<p style="color:var(--danger);">网络错误，请重试。</p>';
+  })
+  .finally(function() {
+    btn.disabled = false;
+    btn.textContent = '\u{1F504} 生成/刷新洞察';
+  });
+}
+
+document.querySelectorAll('.trend-btn').forEach(function(b) {
+  b.addEventListener('click', function() { loadTrends(parseInt(this.dataset.days)); });
+});
+
+loadTrends(7);
+</script>
+{{end}}

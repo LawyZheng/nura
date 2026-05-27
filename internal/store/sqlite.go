@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/LawyZheng/nura/internal/model"
 
@@ -60,6 +61,7 @@ func (s *Store) migrate() error {
 		&model.MedicationLog{},
 		&model.AIInsight{},
 		&model.ChatMessage{},
+		&model.MedicationReminder{},
 	)
 }
 
@@ -204,6 +206,14 @@ func (s *Store) ListSymptomLogs(patientID int, limit int) ([]*model.SymptomLog, 
 	return logs, nil
 }
 
+func (s *Store) ListSymptomLogsByDateRange(patientID int, start, end time.Time) ([]*model.SymptomLog, error) {
+	var logs []*model.SymptomLog
+	if err := s.db.Where("patient_id = ? AND recorded_at >= ? AND recorded_at <= ?", patientID, start, end).Order("recorded_at").Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
 // --- Meal Log ---
 
 func (s *Store) InsertMealLog(ml *model.MealLog) (int, error) {
@@ -211,6 +221,22 @@ func (s *Store) InsertMealLog(ml *model.MealLog) (int, error) {
 		return 0, err
 	}
 	return ml.ID, nil
+}
+
+func (s *Store) ListMealLogs(patientID int, limit int) ([]*model.MealLog, error) {
+	var logs []*model.MealLog
+	if err := s.db.Where("patient_id = ?", patientID).Order("recorded_at DESC").Limit(limit).Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+func (s *Store) ListMealLogsByDateRange(patientID int, start, end time.Time) ([]*model.MealLog, error) {
+	var logs []*model.MealLog
+	if err := s.db.Where("patient_id = ? AND recorded_at >= ? AND recorded_at <= ?", patientID, start, end).Order("recorded_at").Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
 }
 
 // --- Medication ---
@@ -230,6 +256,26 @@ func (s *Store) ListActiveMedications(patientID int) ([]*model.Medication, error
 	return meds, nil
 }
 
+func (s *Store) GetMedication(id int) (*model.Medication, error) {
+	var m model.Medication
+	if err := s.db.First(&m, id).Error; err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (s *Store) UpdateMedication(m *model.Medication) error {
+	return s.db.Save(m).Error
+}
+
+func (s *Store) ListAllMedications(patientID int) ([]*model.Medication, error) {
+	var meds []*model.Medication
+	if err := s.db.Where("patient_id = ?", patientID).Order("course_start DESC").Find(&meds).Error; err != nil {
+		return nil, err
+	}
+	return meds, nil
+}
+
 // --- Medication Log ---
 
 func (s *Store) InsertMedicationLog(ml *model.MedicationLog) (int, error) {
@@ -237,6 +283,23 @@ func (s *Store) InsertMedicationLog(ml *model.MedicationLog) (int, error) {
 		return 0, err
 	}
 	return ml.ID, nil
+}
+
+func (s *Store) ListMedicationLogs(medicationID int) ([]*model.MedicationLog, error) {
+	var logs []*model.MedicationLog
+	if err := s.db.Where("medication_id = ?", medicationID).Order("taken_at").Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+func (s *Store) CountMedicationLogsByDateRange(medicationID int, start, end time.Time) (total int64, taken int64, err error) {
+	err = s.db.Model(&model.MedicationLog{}).Where("medication_id = ? AND taken_at >= ? AND taken_at <= ?", medicationID, start, end).Count(&total).Error
+	if err != nil {
+		return
+	}
+	err = s.db.Model(&model.MedicationLog{}).Where("medication_id = ? AND taken_at >= ? AND taken_at <= ? AND skipped = ?", medicationID, start, end, false).Count(&taken).Error
+	return
 }
 
 func (s *Store) GetIndicatorsByCategory(patientID int, category string) ([]*model.MedicalIndicator, error) {
@@ -307,4 +370,41 @@ func (s *Store) InsertAIInsight(ai *model.AIInsight) (int, error) {
 		return 0, err
 	}
 	return ai.ID, nil
+}
+
+func (s *Store) GetLatestAIInsight(patientID int, insightType string) (*model.AIInsight, error) {
+	var ai model.AIInsight
+	if err := s.db.Where("patient_id = ? AND insight_type = ?", patientID, insightType).Order("id DESC").First(&ai).Error; err != nil {
+		return nil, err
+	}
+	return &ai, nil
+}
+
+// --- Medication Reminder ---
+
+func (s *Store) InsertMedicationReminder(r *model.MedicationReminder) (int, error) {
+	if err := s.db.Create(r).Error; err != nil {
+		return 0, err
+	}
+	return r.ID, nil
+}
+
+func (s *Store) ListPendingReminders(patientID int, before time.Time) ([]*model.MedicationReminder, error) {
+	var reminders []*model.MedicationReminder
+	if err := s.db.Where("patient_id = ? AND is_done = ? AND scheduled_at <= ?", patientID, false, before).Order("scheduled_at").Find(&reminders).Error; err != nil {
+		return nil, err
+	}
+	return reminders, nil
+}
+
+func (s *Store) MarkReminderDone(id int) error {
+	now := time.Now()
+	return s.db.Model(&model.MedicationReminder{}).Where("id = ?", id).Updates(map[string]any{
+		"is_done": true,
+		"done_at": now,
+	}).Error
+}
+
+func (s *Store) DeleteRemindersForMedication(medicationID int) error {
+	return s.db.Where("medication_id = ?", medicationID).Delete(&model.MedicationReminder{}).Error
 }

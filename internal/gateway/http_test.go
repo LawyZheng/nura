@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	goruntime "runtime"
 
@@ -691,5 +692,547 @@ func TestWeb_ChatPage(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "与知愈对话") {
 		t.Error("expected chat page title")
+	}
+}
+
+// --- T2: Symptom recording tests ---
+
+func TestAPI_CreateSymptom(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":    pid,
+		"pain_score":    6,
+		"pain_location": "upper_abdomen",
+		"pain_timing":   "fasting",
+		"stool_color":   "normal",
+		"bloating":      true,
+		"note":          "synthetic symptom entry",
+	})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["symptom"]; !ok {
+		t.Error("missing 'symptom' field")
+	}
+
+	var emergency bool
+	json.Unmarshal(resp["emergency"], &emergency)
+	if emergency {
+		t.Error("expected emergency=false for normal stool")
+	}
+}
+
+func TestAPI_CreateSymptom_Emergency_BlackStool(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":  pid,
+		"pain_score":  5,
+		"stool_color": "black",
+	})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["emergency"] != true {
+		t.Error("expected emergency=true for black stool")
+	}
+	if resp["emergency_message"] == nil || resp["emergency_message"] == "" {
+		t.Error("expected emergency_message")
+	}
+}
+
+func TestAPI_CreateSymptom_Emergency_SeverePain(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id": pid,
+		"pain_score": 9,
+	})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["emergency"] != true {
+		t.Error("expected emergency=true for pain_score=9")
+	}
+}
+
+func TestAPI_CreateSymptom_MissingPatientID(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{"pain_score": 5})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestAPI_ListSymptoms(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	ps := 5
+	s.InsertSymptomLog(&model.SymptomLog{
+		PatientID: pid, PainScore: &ps, PainLocation: "upper_abdomen",
+		RecordedAt: time.Now(),
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/symptoms?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var symptoms []model.SymptomLog
+	json.Unmarshal(resp["symptoms"], &symptoms)
+
+	if len(symptoms) != 1 {
+		t.Errorf("expected 1 symptom, got %d", len(symptoms))
+	}
+}
+
+func TestWeb_SymptomsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/symptoms", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "症状记录") {
+		t.Error("expected page title '症状记录'")
+	}
+}
+
+// --- T3: Diet recording tests ---
+
+func TestAPI_CreateMeal(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":    pid,
+		"meal_type":     "lunch",
+		"content":       "synthetic meal: rice and fish",
+		"irritant_tags": []string{},
+	})
+	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["meal"]; !ok {
+		t.Error("missing 'meal' field")
+	}
+}
+
+func TestAPI_CreateMeal_WithIrritants(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":    pid,
+		"meal_type":     "lunch",
+		"content":       "synthetic spicy hotpot",
+		"irritant_tags": []string{"spicy", "oily"},
+	})
+	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	meal := resp["meal"].(map[string]any)
+	if meal["has_irritant"] != true {
+		t.Error("expected has_irritant=true for irritant_tags")
+	}
+}
+
+func TestAPI_CreateMeal_MissingFields(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{"meal_type": "lunch"})
+	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestAPI_ListMeals(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertMealLog(&model.MealLog{
+		PatientID: pid, MealType: "lunch", Content: "synthetic rice",
+		RecordedAt: time.Now(),
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/meals?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var meals []model.MealLog
+	json.Unmarshal(resp["meals"], &meals)
+
+	if len(meals) != 1 {
+		t.Errorf("expected 1 meal, got %d", len(meals))
+	}
+}
+
+func TestWeb_MealsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/meals", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "饮食记录") {
+		t.Error("expected page title '饮食记录'")
+	}
+}
+
+// --- T4: Medication tracking tests ---
+
+func TestAPI_CreateMedication(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":   pid,
+		"name":         "Synthetic Amoxicillin",
+		"category":     "antibiotic",
+		"dosage":       "1g",
+		"frequency":    "bid",
+		"time_of_day":  "早晚餐后",
+		"course_start": "2026-05-20",
+		"course_end":   "2026-06-02",
+	})
+	req := httptest.NewRequest("POST", "/api/medications", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["medication"]; !ok {
+		t.Error("missing 'medication' field")
+	}
+}
+
+func TestAPI_UpdateMedication(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug X", IsActive: true,
+	})
+
+	body, _ := json.Marshal(map[string]any{"is_active": false})
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/medications/%d", medID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAPI_ListMedications(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var meds []model.Medication
+	json.Unmarshal(resp["medications"], &meds)
+
+	if len(meds) == 0 {
+		t.Error("expected at least 1 medication from seed data")
+	}
+}
+
+func TestAPI_CreateMedicationLog(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+
+	body, _ := json.Marshal(map[string]any{"skipped": false, "note": "taken on time"})
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/medications/%d/log", medID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAPI_ListMedicationLogs(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: time.Now()})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications/%d/logs", medID), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var logs []model.MedicationLog
+	json.Unmarshal(resp["logs"], &logs)
+
+	if len(logs) != 1 {
+		t.Errorf("expected 1 log, got %d", len(logs))
+	}
+}
+
+func TestWeb_MedicationsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/medications", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "用药管理") {
+		t.Error("expected page title '用药管理'")
+	}
+}
+
+// --- T5: Trend visualization tests ---
+
+func TestAPI_GetTrends(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	ps := 6
+	s.InsertSymptomLog(&model.SymptomLog{
+		PatientID: pid, PainScore: &ps, PainLocation: "upper_abdomen",
+		RecordedAt: time.Now(),
+	})
+	s.InsertMealLog(&model.MealLog{
+		PatientID: pid, MealType: "lunch", Content: "synthetic spicy food",
+		HasIrritant: true, IrritantDetail: "spicy",
+		RecordedAt: time.Now(),
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/trends?patient_id=%d&days=7", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	for _, field := range []string{"symptoms", "meals", "medications", "period"} {
+		if _, ok := resp[field]; !ok {
+			t.Errorf("missing field %q", field)
+		}
+	}
+}
+
+func TestAPI_GetTrends_MissingPatientID(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", "/api/trends", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestAPI_GenerateInsight(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"patient_id": pid,
+		"days":       7,
+	})
+	req := httptest.NewRequest("POST", "/api/trends/insight", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["insight"]; !ok {
+		t.Error("missing 'insight' field")
+	}
+	if _, ok := resp["disclaimer"]; !ok {
+		t.Error("missing 'disclaimer' field")
+	}
+}
+
+// --- T7: Reminder tests ---
+
+func TestAPI_PendingReminders(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+	s.InsertMedicationReminder(&model.MedicationReminder{
+		MedicationID: medID, PatientID: pid,
+		ScheduledAt: time.Now().Add(-1 * time.Hour),
+		Label:       "test reminder",
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/reminders/pending?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var reminders []map[string]any
+	json.Unmarshal(resp["reminders"], &reminders)
+	if len(reminders) != 1 {
+		t.Errorf("expected 1 pending reminder, got %d", len(reminders))
+	}
+}
+
+func TestAPI_MarkReminderDone(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+	remID, _ := s.InsertMedicationReminder(&model.MedicationReminder{
+		MedicationID: medID, PatientID: pid,
+		ScheduledAt: time.Now().Add(-1 * time.Hour),
+		Label:       "test reminder",
+	})
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/reminders/%d/done", remID), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
+func TestWeb_TrendsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/trends", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "趋势分析") {
+		t.Error("expected page title '趋势分析'")
+	}
+	if !strings.Contains(body, "chart.js") || !strings.Contains(body, "Chart") {
+		t.Error("expected Chart.js reference")
 	}
 }

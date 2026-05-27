@@ -16,6 +16,7 @@ import (
 	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
+	"github.com/LawyZheng/nura/internal/trend"
 	"github.com/LawyZheng/nura/internal/web"
 )
 
@@ -30,6 +31,7 @@ type Server struct {
 	traces   *runtime.TraceStore
 	store    *store.Store
 	chatSvc  *chat.Service
+	trendSvc *trend.Service
 	engine   *gin.Engine
 	srv      *http.Server
 }
@@ -42,6 +44,7 @@ func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.
 		traces:   agent.Traces(),
 		store:    s,
 		chatSvc:  chat.NewService(llm, policy.NewEngine(), ks, s),
+		trendSvc: trend.NewService(llm, s),
 		engine:   gin.New(),
 	}
 	gw.engine.Use(gin.Recovery())
@@ -66,6 +69,19 @@ func (gw *Server) routes() {
 	api.GET("/indicators", gw.handleListIndicators)
 	api.POST("/chat", gw.handleChat)
 	api.GET("/chat/history", gw.handleChatHistory)
+	api.POST("/symptoms", gw.handleCreateSymptom)
+	api.GET("/symptoms", gw.handleListSymptoms)
+	api.POST("/meals", gw.handleCreateMeal)
+	api.GET("/meals", gw.handleListMeals)
+	api.POST("/medications", gw.handleCreateMedication)
+	api.PUT("/medications/:id", gw.handleUpdateMedication)
+	api.GET("/medications", gw.handleListMedications)
+	api.POST("/medications/:id/log", gw.handleCreateMedicationLog)
+	api.GET("/medications/:id/logs", gw.handleListMedicationLogs)
+	api.GET("/trends", gw.handleGetTrends)
+	api.POST("/trends/insight", gw.handleGenerateInsight)
+	api.GET("/reminders/pending", gw.handlePendingReminders)
+	api.POST("/reminders/:id/done", gw.handleMarkReminderDone)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
@@ -73,6 +89,10 @@ func (gw *Server) routes() {
 	gw.engine.GET("/patient/:id/reports", gw.handleReportList)
 	gw.engine.GET("/patient/:id/reports/:report_id", gw.handleReportDetail)
 	gw.engine.GET("/patient/:id/chat", gw.handleChatPage)
+	gw.engine.GET("/patient/:id/symptoms", gw.handleSymptomsPage)
+	gw.engine.GET("/patient/:id/meals", gw.handleMealsPage)
+	gw.engine.GET("/patient/:id/medications", gw.handleMedicationsPage)
+	gw.engine.GET("/patient/:id/trends", gw.handleTrendsPage)
 	gw.engine.StaticFS("/static", web.StaticFS())
 }
 

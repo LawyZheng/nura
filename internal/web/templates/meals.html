@@ -1,0 +1,99 @@
+{{define "title"}}饮食记录{{end}}
+{{define "content"}}
+<div class="page-header">
+  <a href="/patient/{{.PatientID}}" class="back-link">&larr; 返回健康档案</a>
+  <h1>饮食记录 &middot; {{.Profile.Name}}</h1>
+</div>
+
+<div class="card">
+  <h3>快速记录</h3>
+  <form id="meal-form" onsubmit="return submitMeal(event)">
+    <div class="form-group">
+      <label>餐次</label>
+      <div class="checkbox-group">
+        <label><input type="radio" name="meal_type" value="breakfast"> 早餐</label>
+        <label><input type="radio" name="meal_type" value="lunch" checked> 午餐</label>
+        <label><input type="radio" name="meal_type" value="dinner"> 晚餐</label>
+        <label><input type="radio" name="meal_type" value="snack"> 加餐</label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>吃了什么</label>
+      <input type="text" name="content" placeholder="例：白粥 + 蒸蛋 + 咸菜" required>
+    </div>
+
+    <div class="form-group">
+      <label>刺激性食物标签</label>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="irritant" value="spicy"> 辣</label>
+        <label><input type="checkbox" name="irritant" value="oily"> 油腻</label>
+        <label><input type="checkbox" name="irritant" value="cold"> 生冷</label>
+        <label><input type="checkbox" name="irritant" value="alcohol"> 酒精</label>
+        <label><input type="checkbox" name="irritant" value="coffee"> 咖啡</label>
+        <label><input type="checkbox" name="irritant" value="strong_tea"> 浓茶</label>
+        <label><input type="checkbox" name="irritant" value="carbonated"> 碳酸饮料</label>
+      </div>
+    </div>
+
+    <button type="submit" class="btn" id="meal-submit">提交记录</button>
+  </form>
+</div>
+
+{{if .Meals}}
+<div class="card">
+  <h3>最近记录</h3>
+  <table>
+    <thead>
+      <tr><th>时间</th><th>餐次</th><th>内容</th><th>刺激性</th></tr>
+    </thead>
+    <tbody>
+      {{range .Meals}}
+      <tr>
+        <td>{{.RecordedAt.Format "01-02 15:04"}}</td>
+        <td>{{mealTypeCN .MealType}}</td>
+        <td>{{.Content}}</td>
+        <td>{{if .HasIrritant}}<span class="badge badge-warning">{{.IrritantDetail}}</span>{{else}}<span class="badge badge-success">清淡</span>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+function submitMeal(e) {
+  e.preventDefault();
+  var form = document.getElementById('meal-form');
+  var btn = document.getElementById('meal-submit');
+  btn.disabled = true;
+
+  var mealType = form.querySelector('input[name="meal_type"]:checked');
+  var irritants = [];
+  form.querySelectorAll('input[name="irritant"]:checked').forEach(function(cb) {
+    irritants.push(cb.value);
+  });
+
+  var data = {
+    patient_id: {{.PatientID}},
+    meal_type: mealType ? mealType.value : 'lunch',
+    content: form.querySelector('[name="content"]').value,
+    irritant_tags: irritants
+  };
+
+  fetch('/api/meals', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function() { location.reload(); })
+  .catch(function() { alert('提交失败，请重试'); })
+  .finally(function() { btn.disabled = false; });
+
+  return false;
+}
+</script>
+{{end}}

@@ -654,3 +654,321 @@ func TestStore_NewWithInvalidPath(t *testing.T) {
 		t.Error("expected error for invalid path")
 	}
 }
+
+// --- Phase 3 Store extension tests ---
+
+func TestStore_ListSymptomLogsByDateRange(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	base := time.Date(2026, 5, 20, 9, 0, 0, 0, time.UTC)
+	for i := 0; i < 5; i++ {
+		ps := 3 + i
+		s.InsertSymptomLog(&model.SymptomLog{
+			PatientID:    pid,
+			PainScore:    &ps,
+			PainLocation: "upper_abdomen",
+			RecordedAt:   base.AddDate(0, 0, i),
+		})
+	}
+
+	start := time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 23, 23, 59, 59, 0, time.UTC)
+	logs, err := s.ListSymptomLogsByDateRange(pid, start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 3 {
+		t.Errorf("expected 3 logs in range, got %d", len(logs))
+	}
+}
+
+func TestStore_ListMealLogs(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	for i := 0; i < 5; i++ {
+		s.InsertMealLog(&model.MealLog{
+			PatientID:  pid,
+			MealType:   "lunch",
+			Content:    fmt.Sprintf("synthetic meal %d", i),
+			RecordedAt: time.Now().Add(time.Duration(i) * time.Hour),
+		})
+	}
+
+	meals, err := s.ListMealLogs(pid, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(meals) != 3 {
+		t.Fatalf("expected 3 meals, got %d", len(meals))
+	}
+}
+
+func TestStore_ListMealLogsByDateRange(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	base := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	for i := 0; i < 5; i++ {
+		s.InsertMealLog(&model.MealLog{
+			PatientID:  pid,
+			MealType:   "lunch",
+			Content:    fmt.Sprintf("synthetic meal %d", i),
+			RecordedAt: base.AddDate(0, 0, i),
+		})
+	}
+
+	start := time.Date(2026, 5, 22, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 24, 23, 59, 59, 0, time.UTC)
+	meals, err := s.ListMealLogsByDateRange(pid, start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(meals) != 3 {
+		t.Errorf("expected 3 meals in range, got %d", len(meals))
+	}
+}
+
+func TestStore_GetMedication(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	id, err := s.InsertMedication(&model.Medication{
+		PatientID:   pid,
+		Name:        "Synthetic Omeprazole",
+		Category:    "ppi",
+		Dosage:      "20mg",
+		Frequency:   "bid",
+		CourseStart: "2026-05-20",
+		CourseEnd:   "2026-06-02",
+		IsActive:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	med, err := s.GetMedication(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if med.Name != "Synthetic Omeprazole" {
+		t.Errorf("name = %q, want 'Synthetic Omeprazole'", med.Name)
+	}
+}
+
+func TestStore_UpdateMedication(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	id, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+
+	med, _ := s.GetMedication(id)
+	med.IsActive = false
+	err := s.UpdateMedication(med)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, _ := s.GetMedication(id)
+	if updated.IsActive {
+		t.Error("expected is_active=false after update")
+	}
+}
+
+func TestStore_ListAllMedications(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertMedication(&model.Medication{PatientID: pid, Name: "Active Drug", IsActive: true})
+	inactiveID, _ := s.InsertMedication(&model.Medication{PatientID: pid, Name: "Inactive Drug", IsActive: true})
+	// Deactivate via update (GORM skips zero-value bool on create)
+	inactive, _ := s.GetMedication(inactiveID)
+	inactive.IsActive = false
+	s.UpdateMedication(inactive)
+
+	all, err := s.ListAllMedications(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 medications (active+inactive), got %d", len(all))
+	}
+
+	active, _ := s.ListActiveMedications(pid)
+	if len(active) != 1 {
+		t.Errorf("expected 1 active medication, got %d", len(active))
+	}
+}
+
+func TestStore_ListMedicationLogs(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+
+	for i := 0; i < 3; i++ {
+		s.InsertMedicationLog(&model.MedicationLog{
+			MedicationID: medID,
+			TakenAt:      time.Now().Add(time.Duration(i) * time.Hour),
+			Skipped:      i == 1,
+		})
+	}
+
+	logs, err := s.ListMedicationLogs(medID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 3 {
+		t.Fatalf("expected 3 logs, got %d", len(logs))
+	}
+}
+
+func TestStore_CountMedicationLogsByDateRange(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+
+	base := time.Date(2026, 5, 20, 8, 0, 0, 0, time.UTC)
+	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: base})
+	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: base.Add(12 * time.Hour)})
+	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: base.Add(24 * time.Hour), Skipped: true})
+	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: base.AddDate(0, 0, 5)}) // out of range
+
+	start := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 21, 23, 59, 59, 0, time.UTC)
+	total, taken, err := s.CountMedicationLogsByDateRange(medID, start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 {
+		t.Errorf("expected total=3, got %d", total)
+	}
+	if taken != 2 {
+		t.Errorf("expected taken=2, got %d", taken)
+	}
+}
+
+func TestStore_GetLatestAIInsight(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertAIInsight(&model.AIInsight{
+		PatientID: pid, InsightType: "trend_7d", Content: "old insight",
+	})
+	s.InsertAIInsight(&model.AIInsight{
+		PatientID: pid, InsightType: "trend_7d", Content: "latest insight",
+	})
+	s.InsertAIInsight(&model.AIInsight{
+		PatientID: pid, InsightType: "trend_14d", Content: "different type",
+	})
+
+	latest, err := s.GetLatestAIInsight(pid, "trend_7d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Content != "latest insight" {
+		t.Errorf("content = %q, want 'latest insight'", latest.Content)
+	}
+
+	_, err = s.GetLatestAIInsight(pid, "nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent insight type")
+	}
+}
+
+func TestStore_MedicationReminder(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+
+	scheduled := time.Date(2026, 5, 27, 7, 30, 0, 0, time.UTC)
+	id, err := s.InsertMedicationReminder(&model.MedicationReminder{
+		MedicationID: medID,
+		PatientID:    pid,
+		ScheduledAt:  scheduled,
+		Label:        "早餐前：Synthetic Drug 20mg",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id <= 0 {
+		t.Errorf("expected positive id, got %d", id)
+	}
+
+	// Insert another reminder for later
+	s.InsertMedicationReminder(&model.MedicationReminder{
+		MedicationID: medID,
+		PatientID:    pid,
+		ScheduledAt:  scheduled.Add(10 * time.Hour),
+		Label:        "晚餐前：Synthetic Drug 20mg",
+	})
+
+	// List pending before noon — should get only the morning one
+	before := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	pending, err := s.ListPendingReminders(pid, before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected 1 pending reminder before noon, got %d", len(pending))
+	}
+
+	// Mark done
+	err = s.MarkReminderDone(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pending, _ = s.ListPendingReminders(pid, before)
+	if len(pending) != 0 {
+		t.Errorf("expected 0 pending after marking done, got %d", len(pending))
+	}
+}
+
+func TestStore_DeleteRemindersForMedication(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	med1, _ := s.InsertMedication(&model.Medication{PatientID: pid, Name: "Drug A", IsActive: true})
+	med2, _ := s.InsertMedication(&model.Medication{PatientID: pid, Name: "Drug B", IsActive: true})
+
+	scheduled := time.Date(2026, 5, 27, 8, 0, 0, 0, time.UTC)
+	s.InsertMedicationReminder(&model.MedicationReminder{MedicationID: med1, PatientID: pid, ScheduledAt: scheduled, Label: "A"})
+	s.InsertMedicationReminder(&model.MedicationReminder{MedicationID: med2, PatientID: pid, ScheduledAt: scheduled, Label: "B"})
+
+	err := s.DeleteRemindersForMedication(med1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	before := time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)
+	pending, _ := s.ListPendingReminders(pid, before)
+	if len(pending) != 1 {
+		t.Fatalf("expected 1 remaining reminder, got %d", len(pending))
+	}
+	if pending[0].Label != "B" {
+		t.Errorf("remaining reminder label = %q, want 'B'", pending[0].Label)
+	}
+}
