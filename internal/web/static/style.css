@@ -297,3 +297,96 @@ details summary {
 
 .chat-input button:hover { opacity: 0.9; }
 .chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Phase 3 — Pain scale */
+.pain-scale {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pain-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pain-option:hover { background: #f0f0f0; }
+
+.pain-option input[type="radio"] { margin: 0; }
+
+/* Checkbox group */
+.checkbox-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.checkbox-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Emergency card */
+.emergency-card {
+  background: #fef2f2;
+  border: 2px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 12px 0;
+  color: var(--danger);
+}
+
+.emergency-card strong { font-size: 1rem; }
+.emergency-card p { margin-top: 4px; font-size: 0.9rem; }
+
+/* Emergency row in tables */
+.row-emergency { background: #fef2f2; }
+
+/* Progress bar */
+.progress-bar-container {
+  background: #e5e7eb;
+  border-radius: 4px;
+  height: 8px;
+  margin: 8px 0 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: var(--primary);
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.course-info {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+/* Trend range buttons */
+.trend-range-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.trend-range-buttons .btn { opacity: 0.5; }
+.trend-range-buttons .btn.active { opacity: 1; }
+
+/* Nav-links wrap */
+.nav-links { flex-wrap: wrap; }
