@@ -955,3 +955,138 @@ func TestWeb_MealsPage(t *testing.T) {
 		t.Error("expected page title '饮食记录'")
 	}
 }
+
+// --- T4: Medication tracking tests ---
+
+func TestAPI_CreateMedication(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":   pid,
+		"name":         "Synthetic Amoxicillin",
+		"category":     "antibiotic",
+		"dosage":       "1g",
+		"frequency":    "bid",
+		"time_of_day":  "早晚餐后",
+		"course_start": "2026-05-20",
+		"course_end":   "2026-06-02",
+	})
+	req := httptest.NewRequest("POST", "/api/medications", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["medication"]; !ok {
+		t.Error("missing 'medication' field")
+	}
+}
+
+func TestAPI_UpdateMedication(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug X", IsActive: true,
+	})
+
+	body, _ := json.Marshal(map[string]any{"is_active": false})
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/medications/%d", medID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAPI_ListMedications(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var meds []model.Medication
+	json.Unmarshal(resp["medications"], &meds)
+
+	if len(meds) == 0 {
+		t.Error("expected at least 1 medication from seed data")
+	}
+}
+
+func TestAPI_CreateMedicationLog(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+
+	body, _ := json.Marshal(map[string]any{"skipped": false, "note": "taken on time"})
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/medications/%d/log", medID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAPI_ListMedicationLogs(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: time.Now()})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications/%d/logs", medID), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var logs []model.MedicationLog
+	json.Unmarshal(resp["logs"], &logs)
+
+	if len(logs) != 1 {
+		t.Errorf("expected 1 log, got %d", len(logs))
+	}
+}
+
+func TestWeb_MedicationsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/medications", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "用药管理") {
+		t.Error("expected page title '用药管理'")
+	}
+}

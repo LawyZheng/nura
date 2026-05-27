@@ -70,6 +70,11 @@ func (gw *Server) routes() {
 	api.GET("/symptoms", gw.handleListSymptoms)
 	api.POST("/meals", gw.handleCreateMeal)
 	api.GET("/meals", gw.handleListMeals)
+	api.POST("/medications", gw.handleCreateMedication)
+	api.PUT("/medications/:id", gw.handleUpdateMedication)
+	api.GET("/medications", gw.handleListMedications)
+	api.POST("/medications/:id/log", gw.handleCreateMedicationLog)
+	api.GET("/medications/:id/logs", gw.handleListMedicationLogs)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
@@ -79,6 +84,7 @@ func (gw *Server) routes() {
 	gw.engine.GET("/patient/:id/chat", gw.handleChatPage)
 	gw.engine.GET("/patient/:id/symptoms", gw.handleSymptomsPage)
 	gw.engine.GET("/patient/:id/meals", gw.handleMealsPage)
+	gw.engine.GET("/patient/:id/medications", gw.handleMedicationsPage)
 	gw.engine.StaticFS("/static", web.StaticFS())
 }
 
