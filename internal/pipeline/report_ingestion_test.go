@@ -38,23 +38,23 @@ func newTestPipeline(t *testing.T) (*Pipeline, *store.Store) {
 				facts := map[string]any{
 					"indicators": []map[string]any{
 						{
-							"name":           "ulcer_stage",
-							"name_cn":        "溃疡分期",
-							"value":          "A2",
-							"is_abnormal":    true,
+							"name":        "ulcer_stage",
+							"name_cn":     "溃疡分期",
+							"value":       "A2",
+							"is_abnormal": true,
 						},
 						{
-							"name":           "ulcer_size",
-							"name_cn":        "溃疡大小",
-							"value":          "0.8x0.6",
-							"unit":           "cm",
-							"is_abnormal":    false,
+							"name":        "ulcer_size",
+							"name_cn":     "溃疡大小",
+							"value":       "0.8x0.6",
+							"unit":        "cm",
+							"is_abnormal": false,
 						},
 						{
-							"name":           "hp_status",
-							"name_cn":        "幽门螺杆菌",
-							"value":          "阳性",
-							"is_abnormal":    true,
+							"name":        "hp_status",
+							"name_cn":     "幽门螺杆菌",
+							"value":       "阳性",
+							"is_abnormal": true,
 						},
 					},
 				}

@@ -21,14 +21,14 @@ type StageResult struct {
 
 // IngestionResult is the final output of the report ingestion pipeline.
 type IngestionResult struct {
-	ReportType           model.ReportType        `json:"report_type"`
-	ExtractedFacts       map[string]any          `json:"extracted_facts"`
+	ReportType           model.ReportType          `json:"report_type"`
+	ExtractedFacts       map[string]any            `json:"extracted_facts"`
 	NormalizedIndicators []*model.MedicalIndicator `json:"normalized_indicators"`
-	MergeActions         []string                `json:"merge_actions,omitempty"`
-	PatientStateUpdates  []string                `json:"patient_state_updates,omitempty"`
-	MissingFields        []string                `json:"missing_or_uncertain_fields,omitempty"`
-	Explanation          string                  `json:"user_facing_explanation"`
-	Stages               []StageResult           `json:"stages"`
+	MergeActions         []string                  `json:"merge_actions,omitempty"`
+	PatientStateUpdates  []string                  `json:"patient_state_updates,omitempty"`
+	MissingFields        []string                  `json:"missing_or_uncertain_fields,omitempty"`
+	Explanation          string                    `json:"user_facing_explanation"`
+	Stages               []StageResult             `json:"stages"`
 }
 
 // Pipeline processes raw report text through classification, extraction,
@@ -176,13 +176,13 @@ func (p *Pipeline) normalizeIndicators(facts map[string]any, reportType model.Re
 		}
 
 		ind := &model.MedicalIndicator{
-			Category:      category,
-			IndicatorName: getString(m, "name"),
+			Category:        category,
+			IndicatorName:   getString(m, "name"),
 			IndicatorNameCN: getString(m, "name_cn"),
-			Value:         getString(m, "value"),
-			Unit:          getString(m, "unit"),
-			IsAbnormal:    getBool(m, "is_abnormal"),
-			MeasuredAt:    reportDate,
+			Value:           getString(m, "value"),
+			Unit:            getString(m, "unit"),
+			IsAbnormal:      getBool(m, "is_abnormal"),
+			MeasuredAt:      reportDate,
 		}
 
 		if v, ok := getFloat(m, "reference_low"); ok {

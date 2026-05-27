@@ -66,12 +66,12 @@ func (gw *Server) handleGetReport(c *gin.Context) {
 }
 
 type patient360Response struct {
-	Profile             *model.PatientProfile      `json:"profile"`
-	Diagnoses           []*model.Diagnosis         `json:"diagnoses"`
-	ActiveMedications   []*model.Medication        `json:"active_medications"`
-	RecentReports       []*model.HealthReport      `json:"recent_reports"`
-	AbnormalIndicators  []*model.MedicalIndicator  `json:"abnormal_indicators"`
-	MemorySummaries     []*model.MemorySummary     `json:"memory_summaries"`
+	Profile            *model.PatientProfile     `json:"profile"`
+	Diagnoses          []*model.Diagnosis        `json:"diagnoses"`
+	ActiveMedications  []*model.Medication       `json:"active_medications"`
+	RecentReports      []*model.HealthReport     `json:"recent_reports"`
+	AbnormalIndicators []*model.MedicalIndicator `json:"abnormal_indicators"`
+	MemorySummaries    []*model.MemorySummary    `json:"memory_summaries"`
 }
 
 func (gw *Server) handleGetPatient(c *gin.Context) {

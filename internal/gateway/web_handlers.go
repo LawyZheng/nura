@@ -45,13 +45,13 @@ func (gw *Server) handleDashboard(c *gin.Context) {
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := web.Render(c.Writer, "dashboard.html", map[string]any{
-		"Profile":    profile,
-		"Diagnoses":  diagnoses,
-		"Meds":       meds,
-		"Reports":    reports,
-		"Abnormals":  abnormals,
-		"Summaries":  summaries,
-		"PatientID":  pid,
+		"Profile":   profile,
+		"Diagnoses": diagnoses,
+		"Meds":      meds,
+		"Reports":   reports,
+		"Abnormals": abnormals,
+		"Summaries": summaries,
+		"PatientID": pid,
 	}); err != nil {
 		c.String(http.StatusInternalServerError, "render error: %v", err)
 	}
