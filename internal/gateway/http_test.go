@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/LawyZheng/nura/internal/model"
@@ -414,6 +415,48 @@ func TestAPI_CreatePatient(t *testing.T) {
 	}
 	if resp.Name != "Synthetic Patient" {
 		t.Errorf("name = %q, want 'Synthetic Patient'", resp.Name)
+	}
+}
+
+func TestWeb_Index(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "患者列表") {
+		t.Error("expected page to contain '患者列表'")
+	}
+	if !strings.Contains(body, "Test Patient") {
+		t.Error("expected page to contain test patient name")
+	}
+}
+
+func TestWeb_Index_Empty(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := store.New(filepath.Join(dir, "test.db"))
+	defer s.Close()
+
+	llm := &providers.MockProvider{}
+	pe := policy.NewEngine()
+	agent := runtime.NewAgentRuntime(llm, pe, s)
+	srv := NewServer(agent, llm, s)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "暂无患者记录") {
+		t.Error("expected empty state message")
 	}
 }
 

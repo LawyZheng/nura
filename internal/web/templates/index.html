@@ -1,5 +1,86 @@
 {{define "title"}}患者列表{{end}}
 {{define "content"}}
 <h1 class="page-title">患者列表</h1>
-<p>页面开发中</p>
+
+{{if .Patients}}
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>姓名</th>
+        <th>性别</th>
+        <th>出生日期</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Patients}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{if eq .Gender "male"}}男{{else if eq .Gender "female"}}女{{else}}{{.Gender}}{{end}}</td>
+        <td>{{.BirthDate}}</td>
+        <td><a href="/patient/{{.ID}}">查看档案 →</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="card">
+  <p style="color: var(--muted);">暂无患者记录，请添加。</p>
+</div>
+{{end}}
+
+<div class="card">
+  <h3>添加患者</h3>
+  <form id="add-patient-form">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="name">姓名</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+      <div class="form-group">
+        <label for="gender">性别</label>
+        <select id="gender" name="gender">
+          <option value="male">男</option>
+          <option value="female">女</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="birth_date">出生日期</label>
+        <input type="date" id="birth_date" name="birth_date">
+      </div>
+    </div>
+    <button type="submit" class="btn">添加</button>
+  </form>
+</div>
+
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.getElementById('add-patient-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById('name').value,
+    gender: document.getElementById('gender').value,
+    birth_date: document.getElementById('birth_date').value
+  };
+  try {
+    const resp = await fetch('/api/patient', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    if (resp.ok) {
+      window.location.reload();
+    } else {
+      const err = await resp.json();
+      alert('添加失败: ' + (err.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('网络错误: ' + e.message);
+  }
+});
+</script>
 {{end}}
