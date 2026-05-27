@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 )
 
 // CompletionRequest represents a text completion request to an LLM.
@@ -63,6 +64,18 @@ type LLMProvider interface {
 	Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
 	CompleteStream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error)
 	CompleteWithVision(ctx context.Context, req VisionRequest) (*CompletionResponse, error)
+}
+
+// NewProvider creates an LLMProvider by name. Supported: "mock", "anthropic".
+func NewProvider(name, apiKey, model string) (LLMProvider, error) {
+	switch name {
+	case "mock", "":
+		return &MockProvider{}, nil
+	case "anthropic":
+		return NewAnthropicProvider(apiKey, model), nil
+	default:
+		return nil, fmt.Errorf("unknown LLM provider: %q (supported: mock, anthropic)", name)
+	}
 }
 
 // MockProvider is a stub LLM provider for testing without real API keys.

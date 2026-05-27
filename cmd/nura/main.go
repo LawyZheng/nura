@@ -72,8 +72,9 @@ func newRootCmd() *cobra.Command {
 
 func newServeCmd() *cobra.Command {
 	var (
-		port    int
-		dataDir string
+		port     int
+		dataDir  string
+		provider string
 	)
 
 	cmd := &cobra.Command{
@@ -82,6 +83,7 @@ func newServeCmd() *cobra.Command {
 		Long:  "Start the Nura HTTP gateway that exposes the agent API, report ingestion, and trace debugging endpoints.",
 		Example: `  nura serve
   nura serve --port 9090
+  nura serve --provider anthropic
   nura serve --port 9090 --data-dir /tmp/nura-data
   nura serve --config nura.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -90,6 +92,9 @@ func newServeCmd() *cobra.Command {
 			}
 			if !cmd.Flags().Changed("data-dir") {
 				dataDir = cfg.Server.DataDir
+			}
+			if cmd.Flags().Changed("provider") {
+				cfg.LLM.Provider = provider
 			}
 
 			if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -129,6 +134,7 @@ func newServeCmd() *cobra.Command {
 
 	cmd.Flags().IntVar(&port, "port", 8000, "port to listen on")
 	cmd.Flags().StringVar(&dataDir, "data-dir", defaultDataDir(), "directory for persistent data")
+	cmd.Flags().StringVar(&provider, "provider", "mock", "LLM provider: mock or anthropic")
 
 	return cmd
 }
@@ -215,7 +221,12 @@ func initDeps(dataDir string) (*store.Store, providers.LLMProvider, policy.Polic
 		logger.Fatal("init store", zap.Error(err))
 	}
 
-	llm := &providers.MockProvider{}
+	llm, err := providers.NewProvider(cfg.LLM.Provider, cfg.LLM.APIKey, cfg.LLM.Model)
+	if err != nil {
+		logger.Fatal("init LLM provider", zap.Error(err))
+	}
+	logger.Info("LLM provider initialized", zap.String("provider", cfg.LLM.Provider))
+
 	pe := policy.NewEngine()
 
 	return s, llm, pe

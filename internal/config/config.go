@@ -72,5 +72,13 @@ func Load(cfgFile string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
+
+	// Support NURA_ANTHROPIC_API_KEY as a more intuitive alias for NURA_LLM_APIKEY.
+	if cfg.LLM.APIKey == "" {
+		if key := os.Getenv("NURA_ANTHROPIC_API_KEY"); key != "" {
+			cfg.LLM.APIKey = key
+		}
+	}
+
 	return &cfg, nil
 }
