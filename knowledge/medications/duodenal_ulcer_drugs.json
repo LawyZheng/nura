@@ -1,0 +1,102 @@
+{
+  "description": "SYNTHETIC DATA - Common medications for HP eradication and duodenal ulcer treatment. Not real prescriptions.",
+  "quadruple_therapy": {
+    "description": "铋剂四联疗法（HP 根治标准方案）",
+    "duration_days": "10-14",
+    "components": [
+      {
+        "category": "ppi",
+        "name_cn": "奥美拉唑",
+        "name_en": "Omeprazole",
+        "dosage": "20mg",
+        "frequency": "bid（早晚餐前）",
+        "role": "抑制胃酸分泌，提高抗生素疗效"
+      },
+      {
+        "category": "ppi",
+        "name_cn": "雷贝拉唑",
+        "name_en": "Rabeprazole",
+        "dosage": "10mg",
+        "frequency": "bid（早晚餐前）",
+        "role": "PPI 替代选择，不受 CYP2C19 多态性影响"
+      },
+      {
+        "category": "bismuth",
+        "name_cn": "枸橼酸铋钾",
+        "name_en": "Bismuth Potassium Citrate",
+        "dosage": "220mg",
+        "frequency": "bid（餐前半小时）",
+        "role": "保护胃黏膜，协同杀菌"
+      },
+      {
+        "category": "antibiotic",
+        "name_cn": "阿莫西林",
+        "name_en": "Amoxicillin",
+        "dosage": "1000mg",
+        "frequency": "bid（餐后）",
+        "role": "杀灭 HP，耐药率低（<5%）"
+      },
+      {
+        "category": "antibiotic",
+        "name_cn": "克拉霉素",
+        "name_en": "Clarithromycin",
+        "dosage": "500mg",
+        "frequency": "bid（餐后）",
+        "role": "杀灭 HP，与阿莫西林联用"
+      },
+      {
+        "category": "antibiotic",
+        "name_cn": "甲硝唑",
+        "name_en": "Metronidazole",
+        "dosage": "400mg",
+        "frequency": "tid 或 qid",
+        "role": "替代克拉霉素（当耐药时）"
+      },
+      {
+        "category": "antibiotic",
+        "name_cn": "左氧氟沙星",
+        "name_en": "Levofloxacin",
+        "dosage": "500mg",
+        "frequency": "qd",
+        "role": "二线方案用药"
+      }
+    ]
+  },
+  "maintenance_therapy": {
+    "description": "HP 根治后维持治疗（抑酸促愈合）",
+    "duration_weeks": "2-4",
+    "medications": [
+      {
+        "name_cn": "奥美拉唑",
+        "dosage": "20mg",
+        "frequency": "qd（早餐前）",
+        "note": "维持 2-4 周，促进溃疡愈合"
+      },
+      {
+        "name_cn": "铝碳酸镁",
+        "name_en": "Hydrotalcite",
+        "dosage": "500mg-1000mg",
+        "frequency": "tid（餐后 1-2 小时）",
+        "note": "中和胃酸，缓解症状"
+      }
+    ]
+  },
+  "contraindications": [
+    {
+      "drug": "阿莫西林",
+      "contraindication": "青霉素过敏者禁用"
+    },
+    {
+      "drug": "克拉霉素",
+      "contraindication": "严重肝功能不全者慎用"
+    },
+    {
+      "drug": "甲硝唑",
+      "contraindication": "服药期间禁止饮酒（双硫仑样反应）"
+    },
+    {
+      "drug": "左氧氟沙星",
+      "contraindication": "18 岁以下禁用，肌腱损伤风险"
+    }
+  ]
+}

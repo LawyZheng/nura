@@ -38,20 +38,18 @@ Feature work uses isolated worktrees:
 
 ## Build & Dev Commands
 
-> **TBD**: The Go project skeleton has not been initialized yet. Commands below are placeholders to be filled in once `go.mod` exists.
-
 ```bash
 # Build
-# TBD: go build ./...
+go build ./...
 
 # Test
-# TBD: go test ./...
+go test ./...
 
-# Lint
-# TBD: golangci-lint run
+# Lint (install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+# golangci-lint run
 
 # Format
-# TBD: gofmt -w .
+gofmt -w .
 ```
 
 ## Critical Rules
@@ -99,8 +97,6 @@ Feature work uses isolated worktrees:
 
 ## Code Style
 
-> **TBD**: To be finalized when Go skeleton is initialized.
-
 - Follow standard Go conventions (`gofmt`, `go vet`).
 - No comments that paraphrase the next line.
 - No section dividers or banner comments.
@@ -115,10 +111,8 @@ When creating or editing Nura project documents in the Obsidian vault (`$NURA_OB
 
 ## Validation Before Completion
 
-> **TBD**: Commands to be filled in once project skeleton exists.
-
-1. Run build (TBD).
-2. Run tests (TBD).
-3. Run linter (TBD).
+1. Run build: `go build ./...`
+2. Run tests: `go test ./...`
+3. Run linter: `golangci-lint run` (if installed).
 4. Verify no real patient data in any changed files.
 5. Verify health-related outputs have safety boundaries.
