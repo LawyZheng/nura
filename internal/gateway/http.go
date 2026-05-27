@@ -13,6 +13,7 @@ import (
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
+	"github.com/LawyZheng/nura/internal/web"
 )
 
 func init() {
@@ -58,6 +59,13 @@ func (gw *Server) routes() {
 	api.POST("/patient", gw.handleCreatePatient)
 	api.PUT("/patient/:id", gw.handleUpdatePatient)
 	api.GET("/indicators", gw.handleListIndicators)
+
+	// Web UI
+	gw.engine.GET("/", gw.handleIndex)
+	gw.engine.GET("/patient/:id", gw.handleDashboard)
+	gw.engine.GET("/patient/:id/reports", gw.handleReportList)
+	gw.engine.GET("/patient/:id/reports/:report_id", gw.handleReportDetail)
+	gw.engine.StaticFS("/static", web.StaticFS())
 }
 
 // ListenAndServe starts the HTTP server.

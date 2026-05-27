@@ -1,0 +1,27 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{template "title" .}} - 知愈 Nura</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {{block "head" .}}{{end}}
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="brand">知愈 Nura</a>
+      <span class="version">v0.2</span>
+    </nav>
+  </header>
+  <main>
+    {{template "content" .}}
+  </main>
+  <footer>
+    <p>知愈 (Nura) — 本地健康数据中枢 · 不做诊断，不做处方 · 仅供健康参考</p>
+  </footer>
+  {{block "scripts" .}}{{end}}
+</body>
+</html>
+{{end}}
