@@ -80,6 +80,8 @@ func (gw *Server) routes() {
 	api.GET("/medications/:id/logs", gw.handleListMedicationLogs)
 	api.GET("/trends", gw.handleGetTrends)
 	api.POST("/trends/insight", gw.handleGenerateInsight)
+	api.GET("/reminders/pending", gw.handlePendingReminders)
+	api.POST("/reminders/:id/done", gw.handleMarkReminderDone)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)

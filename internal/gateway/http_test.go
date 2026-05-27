@@ -1163,6 +1163,60 @@ func TestAPI_GenerateInsight(t *testing.T) {
 	}
 }
 
+// --- T7: Reminder tests ---
+
+func TestAPI_PendingReminders(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+	s.InsertMedicationReminder(&model.MedicationReminder{
+		MedicationID: medID, PatientID: pid,
+		ScheduledAt: time.Now().Add(-1 * time.Hour),
+		Label:       "test reminder",
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/reminders/pending?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var reminders []map[string]any
+	json.Unmarshal(resp["reminders"], &reminders)
+	if len(reminders) != 1 {
+		t.Errorf("expected 1 pending reminder, got %d", len(reminders))
+	}
+}
+
+func TestAPI_MarkReminderDone(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	medID, _ := s.InsertMedication(&model.Medication{
+		PatientID: pid, Name: "Synthetic Drug", IsActive: true,
+	})
+	remID, _ := s.InsertMedicationReminder(&model.MedicationReminder{
+		MedicationID: medID, PatientID: pid,
+		ScheduledAt: time.Now().Add(-1 * time.Hour),
+		Label:       "test reminder",
+	})
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/reminders/%d/done", remID), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
 func TestWeb_TrendsPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
