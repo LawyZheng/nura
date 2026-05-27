@@ -97,6 +97,8 @@ func (gw *Server) routes() {
 	gw.engine.GET("/patient/:id/meals", gw.handleMealsPage)
 	gw.engine.GET("/patient/:id/medications", gw.handleMedicationsPage)
 	gw.engine.GET("/patient/:id/trends", gw.handleTrendsPage)
+	gw.engine.GET("/share/:token", gw.handleShareView)
+	gw.engine.POST("/share/:token/verify", gw.handleShareVerify)
 	gw.engine.StaticFS("/static", web.StaticFS())
 }
 
