@@ -66,6 +66,8 @@ func (gw *Server) routes() {
 	api.GET("/indicators", gw.handleListIndicators)
 	api.POST("/chat", gw.handleChat)
 	api.GET("/chat/history", gw.handleChatHistory)
+	api.POST("/symptoms", gw.handleCreateSymptom)
+	api.GET("/symptoms", gw.handleListSymptoms)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
@@ -73,6 +75,7 @@ func (gw *Server) routes() {
 	gw.engine.GET("/patient/:id/reports", gw.handleReportList)
 	gw.engine.GET("/patient/:id/reports/:report_id", gw.handleReportDetail)
 	gw.engine.GET("/patient/:id/chat", gw.handleChatPage)
+	gw.engine.GET("/patient/:id/symptoms", gw.handleSymptomsPage)
 	gw.engine.StaticFS("/static", web.StaticFS())
 }
 

@@ -7,6 +7,9 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"strings"
+
+	"github.com/LawyZheng/nura/internal/model"
 )
 
 //go:embed templates/*.html
@@ -16,8 +19,14 @@ var templateFS embed.FS
 var staticFS embed.FS
 
 var funcMap = template.FuncMap{
-	"reportTypeCN": reportTypeCN,
-	"derefFloat":   derefFloat,
+	"reportTypeCN":     reportTypeCN,
+	"derefFloat":       derefFloat,
+	"derefInt":         derefInt,
+	"locationCN":       locationCN,
+	"stoolCN":          stoolCN,
+	"companionSymptoms": companionSymptoms,
+	"mealTypeCN":       mealTypeCN,
+	"seq":              seq,
 }
 
 func derefFloat(f *float64) string {
@@ -32,7 +41,7 @@ var pages map[string]*template.Template
 
 func init() {
 	pages = make(map[string]*template.Template)
-	pageFiles := []string{"index.html", "dashboard.html", "reports.html", "report_detail.html", "chat.html"}
+	pageFiles := []string{"index.html", "dashboard.html", "reports.html", "report_detail.html", "chat.html", "symptoms.html"}
 
 	for _, pf := range pageFiles {
 		t := template.Must(
@@ -60,6 +69,78 @@ func Render(w io.Writer, page string, data any) error {
 		return fmt.Errorf("template %q not found", page)
 	}
 	return t.ExecuteTemplate(w, "layout", data)
+}
+
+func derefInt(p *int) string {
+	if p == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *p)
+}
+
+func locationCN(loc string) string {
+	m := map[string]string{
+		"upper_abdomen": "上腹",
+		"lower_abdomen": "下腹",
+		"left_upper":    "左上腹",
+		"right_upper":   "右上腹",
+		"navel_area":    "脐周",
+	}
+	if cn, ok := m[loc]; ok {
+		return cn
+	}
+	return loc
+}
+
+func stoolCN(color string) string {
+	m := map[string]string{
+		"normal": "正常",
+		"dark":   "偏深",
+		"black":  "黑便",
+		"bloody": "血便",
+	}
+	if cn, ok := m[color]; ok {
+		return cn
+	}
+	return color
+}
+
+func companionSymptoms(sl *model.SymptomLog) string {
+	var parts []string
+	if sl.Bloating {
+		parts = append(parts, "腹胀")
+	}
+	if sl.Nausea {
+		parts = append(parts, "恶心")
+	}
+	if sl.AcidReflux {
+		parts = append(parts, "反酸")
+	}
+	if len(parts) == 0 {
+		return "-"
+	}
+	return strings.Join(parts, "、")
+}
+
+func mealTypeCN(mt string) string {
+	m := map[string]string{
+		"breakfast": "早餐",
+		"lunch":     "午餐",
+		"dinner":    "晚餐",
+		"snack":     "加餐",
+	}
+	if cn, ok := m[mt]; ok {
+		return cn
+	}
+	return mt
+}
+
+func seq(n int) []int {
+	s := make([]int, n)
+	for i := range s {
+		s[i] = i + 1
+	}
+	return s
 }
 
 func reportTypeCN(rt string) string {

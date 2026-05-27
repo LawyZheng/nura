@@ -1,0 +1,152 @@
+{{define "title"}}症状记录{{end}}
+{{define "content"}}
+<div class="page-header">
+  <a href="/patient/{{.PatientID}}" class="back-link">&larr; 返回健康档案</a>
+  <h1>症状记录 &middot; {{.Profile.Name}}</h1>
+</div>
+
+<div class="card">
+  <h3>新增记录</h3>
+  <form id="symptom-form" onsubmit="return submitSymptom(event)">
+    <div class="form-group">
+      <label>腹痛评分（1-10）</label>
+      <div class="pain-scale">
+        {{range $i := seq 10}}
+        <label class="pain-option">
+          <input type="radio" name="pain_score" value="{{$i}}"> {{$i}}
+        </label>
+        {{end}}
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>疼痛位置</label>
+        <select name="pain_location">
+          <option value="">-- 选择 --</option>
+          <option value="upper_abdomen">上腹</option>
+          <option value="lower_abdomen">下腹</option>
+          <option value="left_upper">左上腹</option>
+          <option value="right_upper">右上腹</option>
+          <option value="navel_area">脐周</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>疼痛时间</label>
+        <select name="pain_timing">
+          <option value="">-- 选择 --</option>
+          <option value="fasting">空腹痛</option>
+          <option value="postprandial">餐后痛</option>
+          <option value="nocturnal">夜间痛</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>大便颜色</label>
+      <select name="stool_color" id="stool-color" onchange="checkStoolEmergency(this)">
+        <option value="">-- 选择 --</option>
+        <option value="normal">正常</option>
+        <option value="dark">偏深</option>
+        <option value="black">黑便</option>
+        <option value="bloody">血便</option>
+      </select>
+    </div>
+
+    <div id="emergency-card" class="emergency-card" style="display:none;">
+      <strong>&#x26A0;&#xFE0F; 紧急提醒</strong>
+      <p>检测到可能的紧急健康状况。请立即就医或拨打 120 急救电话。Nura 不能替代紧急医疗救治。</p>
+    </div>
+
+    <div class="form-group">
+      <label>伴随症状</label>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="bloating"> 腹胀</label>
+        <label><input type="checkbox" name="nausea"> 恶心</label>
+        <label><input type="checkbox" name="acid_reflux"> 反酸</label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" name="note" placeholder="可选备注...">
+    </div>
+
+    <button type="submit" class="btn" id="symptom-submit">提交记录</button>
+  </form>
+</div>
+
+{{if .Symptoms}}
+<div class="card">
+  <h3>历史记录</h3>
+  <table>
+    <thead>
+      <tr><th>时间</th><th>评分</th><th>位置</th><th>大便</th><th>伴随</th><th>备注</th></tr>
+    </thead>
+    <tbody>
+      {{range .Symptoms}}
+      <tr{{if or (eq .StoolColor "black") (eq .StoolColor "bloody")}} class="row-emergency"{{end}}>
+        <td>{{.RecordedAt.Format "01-02 15:04"}}</td>
+        <td>{{if .PainScore}}{{derefInt .PainScore}}{{else}}-{{end}}</td>
+        <td>{{locationCN .PainLocation}}</td>
+        <td>{{stoolCN .StoolColor}}</td>
+        <td>{{companionSymptoms .}}</td>
+        <td>{{.Note}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+
+<div class="disclaimer">
+  &#x26A0;&#xFE0F; 如出现黑便、呕血或剧烈腹痛，请立即就医或拨打 120。
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function checkStoolEmergency(sel) {
+  var card = document.getElementById('emergency-card');
+  card.style.display = (sel.value === 'black' || sel.value === 'bloody') ? 'block' : 'none';
+}
+
+function submitSymptom(e) {
+  e.preventDefault();
+  var form = document.getElementById('symptom-form');
+  var btn = document.getElementById('symptom-submit');
+  btn.disabled = true;
+
+  var painRadio = form.querySelector('input[name="pain_score"]:checked');
+  var data = {
+    patient_id: {{.PatientID}},
+    pain_score: painRadio ? parseInt(painRadio.value) : null,
+    pain_location: form.querySelector('[name="pain_location"]').value,
+    pain_timing: form.querySelector('[name="pain_timing"]').value,
+    stool_color: form.querySelector('[name="stool_color"]').value,
+    bloating: form.querySelector('[name="bloating"]').checked,
+    nausea: form.querySelector('[name="nausea"]').checked,
+    acid_reflux: form.querySelector('[name="acid_reflux"]').checked,
+    note: form.querySelector('[name="note"]').value
+  };
+
+  fetch('/api/symptoms', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(resp) {
+    if (resp.emergency) {
+      document.getElementById('emergency-card').style.display = 'block';
+      document.getElementById('emergency-card').querySelector('p').textContent = resp.emergency_message;
+    }
+    location.reload();
+  })
+  .catch(function() { alert('提交失败，请重试'); })
+  .finally(function() { btn.disabled = false; });
+
+  return false;
+}
+</script>
+{{end}}

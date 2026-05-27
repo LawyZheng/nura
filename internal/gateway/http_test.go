@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	goruntime "runtime"
 
@@ -691,5 +692,153 @@ func TestWeb_ChatPage(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "与知愈对话") {
 		t.Error("expected chat page title")
+	}
+}
+
+// --- T2: Symptom recording tests ---
+
+func TestAPI_CreateSymptom(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":    pid,
+		"pain_score":    6,
+		"pain_location": "upper_abdomen",
+		"pain_timing":   "fasting",
+		"stool_color":   "normal",
+		"bloating":      true,
+		"note":          "synthetic symptom entry",
+	})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["symptom"]; !ok {
+		t.Error("missing 'symptom' field")
+	}
+
+	var emergency bool
+	json.Unmarshal(resp["emergency"], &emergency)
+	if emergency {
+		t.Error("expected emergency=false for normal stool")
+	}
+}
+
+func TestAPI_CreateSymptom_Emergency_BlackStool(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":  pid,
+		"pain_score":  5,
+		"stool_color": "black",
+	})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["emergency"] != true {
+		t.Error("expected emergency=true for black stool")
+	}
+	if resp["emergency_message"] == nil || resp["emergency_message"] == "" {
+		t.Error("expected emergency_message")
+	}
+}
+
+func TestAPI_CreateSymptom_Emergency_SeverePain(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id": pid,
+		"pain_score": 9,
+	})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["emergency"] != true {
+		t.Error("expected emergency=true for pain_score=9")
+	}
+}
+
+func TestAPI_CreateSymptom_MissingPatientID(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{"pain_score": 5})
+	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestAPI_ListSymptoms(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	ps := 5
+	s.InsertSymptomLog(&model.SymptomLog{
+		PatientID: pid, PainScore: &ps, PainLocation: "upper_abdomen",
+		RecordedAt: time.Now(),
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/symptoms?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var symptoms []model.SymptomLog
+	json.Unmarshal(resp["symptoms"], &symptoms)
+
+	if len(symptoms) != 1 {
+		t.Errorf("expected 1 symptom, got %d", len(symptoms))
+	}
+}
+
+func TestWeb_SymptomsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/symptoms", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "症状记录") {
+		t.Error("expected page title '症状记录'")
 	}
 }
