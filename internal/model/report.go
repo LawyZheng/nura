@@ -20,15 +20,15 @@ const (
 
 // HealthReport stores a raw health report and its processing state.
 type HealthReport struct {
-	ID               int        `json:"id"`
-	ReportType       ReportType `json:"report_type"`
-	ReportDate       string     `json:"report_date"`
+	ID               int        `json:"id" gorm:"primaryKey;autoIncrement"`
+	ReportType       ReportType `json:"report_type" gorm:"type:text;not null"`
+	ReportDate       string     `json:"report_date" gorm:"not null"`
 	Institution      string     `json:"institution,omitempty"`
 	RawText          string     `json:"raw_text"`
 	AIClassifiedType string     `json:"ai_classified_type,omitempty"`
 	AISummary        string     `json:"ai_summary,omitempty"`
-	SourceType       string     `json:"source_type,omitempty"` // photo / pdf
+	SourceType       string     `json:"source_type,omitempty"`
 	SourcePath       string     `json:"source_path,omitempty"`
-	IsProcessed      bool       `json:"is_processed"`
-	CreatedAt        time.Time  `json:"created_at"`
+	IsProcessed      bool       `json:"is_processed" gorm:"default:false"`
+	CreatedAt        time.Time  `json:"created_at" gorm:"autoCreateTime"`
 }

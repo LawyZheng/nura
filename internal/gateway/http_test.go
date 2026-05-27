@@ -75,8 +75,9 @@ func TestAgentRun(t *testing.T) {
 func TestAgentRun_EmptyMessage(t *testing.T) {
 	srv := newTestServer(t)
 
-	body, _ := json.Marshal(agentRunRequest{})
+	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -94,8 +95,8 @@ func TestAgentRun_MethodNotAllowed(t *testing.T) {
 
 	srv.Handler().ServeHTTP(w, req)
 
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("status = %d, want 405", w.Code)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (gin returns 404 for unregistered method+path combos)", w.Code)
 	}
 }
 
@@ -120,8 +121,9 @@ func TestReportIngest(t *testing.T) {
 func TestReportIngest_EmptyText(t *testing.T) {
 	srv := newTestServer(t)
 
-	body, _ := json.Marshal(reportIngestRequest{})
+	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -150,6 +152,7 @@ func TestTrace_AfterRun(t *testing.T) {
 	// First, do an agent run to create a trace.
 	runBody, _ := json.Marshal(agentRunRequest{UserMessage: "test"})
 	runReq := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(runBody))
+	runReq.Header.Set("Content-Type", "application/json")
 	runW := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(runW, runReq)
 
@@ -166,15 +169,19 @@ func TestTrace_AfterRun(t *testing.T) {
 	}
 }
 
-func TestTrace_EmptyID(t *testing.T) {
+func TestCORS_Preflight(t *testing.T) {
 	srv := newTestServer(t)
 
-	req := httptest.NewRequest("GET", "/agent/debug/trace/", nil)
+	req := httptest.NewRequest("OPTIONS", "/health", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", w.Code)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("CORS origin = %q, want *", got)
 	}
 }

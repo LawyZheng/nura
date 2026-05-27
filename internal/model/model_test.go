@@ -76,7 +76,7 @@ func TestTraceRun_JSON(t *testing.T) {
 
 func TestPatientProfile_Allergies(t *testing.T) {
 	p := PatientProfile{
-		Allergies: []string{"penicillin", "aspirin"},
+		Allergies: StringList{"penicillin", "aspirin"},
 	}
 	data, err := json.Marshal(p)
 	if err != nil {
@@ -89,5 +89,35 @@ func TestPatientProfile_Allergies(t *testing.T) {
 	}
 	if len(p2.Allergies) != 2 {
 		t.Errorf("expected 2 allergies, got %d", len(p2.Allergies))
+	}
+}
+
+func TestStringList_ValueAndScan(t *testing.T) {
+	s := StringList{"a", "b", "c"}
+	v, err := s.Value()
+	if err != nil {
+		t.Fatal(err)
+	}
+	str, ok := v.(string)
+	if !ok {
+		t.Fatal("expected string from Value()")
+	}
+
+	var s2 StringList
+	if err := s2.Scan(str); err != nil {
+		t.Fatal(err)
+	}
+	if len(s2) != 3 {
+		t.Errorf("expected 3 items, got %d", len(s2))
+	}
+}
+
+func TestStringList_ScanNil(t *testing.T) {
+	var s StringList
+	if err := s.Scan(nil); err != nil {
+		t.Fatal(err)
+	}
+	if s != nil {
+		t.Errorf("expected nil, got %v", s)
 	}
 }

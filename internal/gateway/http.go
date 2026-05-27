@@ -2,25 +2,29 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
+	"time"
 
-	"github.com/LawyZheng/nura/internal/model"
+	"github.com/gin-gonic/gin"
+
 	"github.com/LawyZheng/nura/internal/pipeline"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 )
 
+func init() {
+	gin.SetMode(gin.ReleaseMode)
+}
+
 // Server is the HTTP gateway that exposes the agent API.
 type Server struct {
 	agent    *runtime.AgentRuntime
 	pipeline *pipeline.Pipeline
 	traces   *runtime.TraceStore
-	mux      *http.ServeMux
+	engine   *gin.Engine
 	srv      *http.Server
 }
 
@@ -30,24 +34,27 @@ func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.
 		agent:    agent,
 		pipeline: pipeline.NewPipeline(llm, s),
 		traces:   agent.Traces(),
-		mux:      http.NewServeMux(),
+		engine:   gin.New(),
 	}
+	gw.engine.Use(gin.Recovery())
+	gw.engine.Use(corsMiddleware())
+	gw.engine.Use(requestLogger())
 	gw.routes()
 	return gw
 }
 
 func (gw *Server) routes() {
-	gw.mux.HandleFunc("/health", gw.handleHealth)
-	gw.mux.HandleFunc("/agent/run", gw.handleAgentRun)
-	gw.mux.HandleFunc("/agent/report/ingest", gw.handleReportIngest)
-	gw.mux.HandleFunc("/agent/debug/trace/", gw.handleTrace)
+	gw.engine.GET("/health", gw.handleHealth)
+	gw.engine.POST("/agent/run", gw.handleAgentRun)
+	gw.engine.POST("/agent/report/ingest", gw.handleReportIngest)
+	gw.engine.GET("/agent/debug/trace/:trace_id", gw.handleTrace)
 }
 
 // ListenAndServe starts the HTTP server.
 func (gw *Server) ListenAndServe(addr string) error {
 	gw.srv = &http.Server{
 		Addr:    addr,
-		Handler: gw.mux,
+		Handler: gw.engine,
 	}
 	log.Printf("nura gateway listening on %s", addr)
 	return gw.srv.ListenAndServe()
@@ -63,120 +70,137 @@ func (gw *Server) Shutdown(ctx context.Context) error {
 
 // Handler returns the http.Handler for testing.
 func (gw *Server) Handler() http.Handler {
-	return gw.mux
+	return gw.engine
 }
 
-func (gw *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+// --- middleware ---
+
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func requestLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		log.Printf("%s %s %d %s", c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(start))
+	}
+}
+
+// --- handlers ---
+
+// @Summary Health check
+// @Description Returns service health status
+// @Tags system
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Router /health [get]
+func (gw *Server) handleHealth(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 // --- POST /agent/run ---
 
 type agentRunRequest struct {
-	UserMessage string `json:"user_message"`
+	UserMessage string `json:"user_message" binding:"required"`
 	TaskHint    string `json:"task_hint,omitempty"`
 	PatientID   string `json:"patient_id,omitempty"`
 }
 
-func (gw *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
+// @Summary Run agent
+// @Description Execute an agent run with the given user message
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param request body agentRunRequest true "Agent run request"
+// @Success 200 {object} runtime.RunResponse
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /agent/run [post]
+func (gw *Server) handleAgentRun(c *gin.Context) {
 	var req agentRunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_message is required"})
 		return
 	}
 
-	if req.UserMessage == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user_message is required"})
-		return
-	}
-
-	resp, err := gw.agent.Run(r.Context(), runtime.RunRequest{
+	resp, err := gw.agent.Run(c.Request.Context(), runtime.RunRequest{
 		UserMessage: req.UserMessage,
 		TaskHint:    req.TaskHint,
 		PatientID:   req.PatientID,
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 // --- POST /agent/report/ingest ---
 
 type reportIngestRequest struct {
-	RawText    string `json:"raw_text"`
+	RawText    string `json:"raw_text" binding:"required"`
 	ReportDate string `json:"report_date"`
 	SourceType string `json:"source_type,omitempty"`
 	PatientID  string `json:"patient_id,omitempty"`
 }
 
-func (gw *Server) handleReportIngest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
+// @Summary Ingest medical report
+// @Description Parse and ingest a raw medical report through the pipeline
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param request body reportIngestRequest true "Report ingest request"
+// @Success 200 {object} pipeline.IngestionResult
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /agent/report/ingest [post]
+func (gw *Server) handleReportIngest(c *gin.Context) {
 	var req reportIngestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "raw_text is required"})
 		return
 	}
 
-	if req.RawText == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "raw_text is required"})
-		return
-	}
-
-	result, err := gw.pipeline.Run(r.Context(), req.RawText, req.ReportDate)
+	result, err := gw.pipeline.Run(c.Request.Context(), req.RawText, req.ReportDate)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	c.JSON(http.StatusOK, result)
 }
 
-// --- GET /agent/debug/trace/{trace_id} ---
+// --- GET /agent/debug/trace/:trace_id ---
 
-func (gw *Server) handleTrace(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
-	// Extract trace_id from path: /agent/debug/trace/{trace_id}
-	traceID := strings.TrimPrefix(r.URL.Path, "/agent/debug/trace/")
-	if traceID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "trace_id is required"})
-		return
-	}
+// @Summary Get trace
+// @Description Retrieve a completed agent trace by ID
+// @Tags debug
+// @Produce json
+// @Param trace_id path string true "Trace ID"
+// @Success 200 {object} model.TraceRun
+// @Failure 404 {object} map[string]string
+// @Router /agent/debug/trace/{trace_id} [get]
+func (gw *Server) handleTrace(c *gin.Context) {
+	traceID := c.Param("trace_id")
 
 	trace, ok := gw.traces.Get(traceID)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": fmt.Sprintf("trace %s not found", traceID)})
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("trace %s not found", traceID)})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, trace)
+	c.JSON(http.StatusOK, trace)
 }
-
-// --- helpers ---
-
-// writeJSON is a helper that serializes v as JSON and writes it to w.
-// It is only used by this package, so it stays unexported and internal.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-// Ensure TraceRun satisfies the JSON contract at compile time.
-var _ json.Marshaler // not enforced, but documents intent
-var _ = model.TraceRun{}

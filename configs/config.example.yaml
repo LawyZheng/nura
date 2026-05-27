@@ -1,0 +1,30 @@
+# Nura configuration example
+# Copy this file to config.yaml and adjust values as needed.
+# All settings can also be overridden via environment variables with prefix NURA_
+# (e.g. NURA_SERVER_PORT=9090, NURA_LLM_API_KEY=sk-xxx).
+
+server:
+  # HTTP listen port
+  port: 8000
+  # Root directory for application data
+  data_dir: ~/.nura
+
+database:
+  # SQLite database file (relative to data_dir or absolute path)
+  path: nura.db
+
+llm:
+  # LLM provider: mock | openai | anthropic
+  provider: mock
+  # API key for the LLM provider (prefer env var NURA_LLM_API_KEY)
+  api_key: ""
+  # Model identifier (e.g. gpt-4o, claude-3-opus)
+  model: ""
+  # Sampling temperature (0.0 - 1.0)
+  temperature: 0.1
+
+logging:
+  # Log level: debug | info | warn | error
+  level: info
+  # Log format: console | json
+  format: console

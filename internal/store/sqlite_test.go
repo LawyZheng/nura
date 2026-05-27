@@ -1,7 +1,6 @@
 package store
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -29,7 +28,7 @@ func TestStore_PatientProfile(t *testing.T) {
 		BirthDate: "1990-01-01",
 		Height:    175,
 		Weight:    70,
-		Allergies: []string{"penicillin"},
+		Allergies: model.StringList{"penicillin"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -118,17 +117,17 @@ func TestStore_MedicalIndicator(t *testing.T) {
 	refLow := 130.0
 	refHigh := 175.0
 	_, err := s.InsertIndicator(&model.MedicalIndicator{
-		ReportID:      reportID,
-		Category:      "blood",
-		IndicatorName: "hemoglobin",
-		IndicatorNameCN: "血红蛋白",
-		Value:         "108",
-		Unit:          "g/L",
-		ReferenceLow:  &refLow,
-		ReferenceHigh: &refHigh,
-		IsAbnormal:    true,
+		ReportID:          reportID,
+		Category:          "blood",
+		IndicatorName:     "hemoglobin",
+		IndicatorNameCN:   "血红蛋白",
+		Value:             "108",
+		Unit:              "g/L",
+		ReferenceLow:      &refLow,
+		ReferenceHigh:     &refHigh,
+		IsAbnormal:        true,
 		AbnormalDirection: "low",
-		MeasuredAt:    "2024-03-01",
+		MeasuredAt:        "2024-03-01",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +285,7 @@ func TestStore_AIInsight(t *testing.T) {
 }
 
 func TestStore_NewWithInvalidPath(t *testing.T) {
-	_, err := New(filepath.Join(os.DevNull, "nonexistent", "test.db"))
+	_, err := New("/dev/null/nonexistent/impossible/test.db")
 	if err == nil {
 		t.Error("expected error for invalid path")
 	}

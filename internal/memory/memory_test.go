@@ -27,7 +27,7 @@ func seedTestData(t *testing.T, s *store.Store) {
 		Name:      "Test Patient",
 		Gender:    "male",
 		BirthDate: "1990-06-15",
-		Allergies: []string{"penicillin"},
+		Allergies: model.StringList{"penicillin"},
 	})
 	if err != nil {
 		t.Fatal(err)
