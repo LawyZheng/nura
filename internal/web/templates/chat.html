@@ -1,0 +1,123 @@
+{{define "title"}}与知愈对话{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <a href="/patient/{{.PatientID}}" class="back-link">← 返回健康档案</a>
+  <h1>与知愈对话 · {{.Profile.Name}}</h1>
+</div>
+
+<div class="chat-container">
+  <div id="chat-messages" class="chat-messages">
+    {{range .Messages}}
+    <div class="chat-msg chat-msg-{{.Role}}">
+      <div class="chat-msg-label">{{if eq .Role "user"}}你{{else}}知愈{{end}}</div>
+      <div class="chat-msg-content">
+        {{.Content}}
+        {{if eq .Role "assistant"}}
+        <div class="chat-meta">
+          {{if .Sources}}
+          <div class="chat-sources">📋 参考来源：{{range .Sources}}{{.}} {{end}}</div>
+          {{end}}
+          {{if .Confidence}}
+          <div class="chat-confidence">📊 置信度：{{.Confidence}}</div>
+          {{end}}
+          <div class="chat-disclaimer">⚠️ 以上内容仅供健康参考，不构成医疗建议。如有疑问请咨询专业医生。</div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <form id="chat-form" class="chat-input" onsubmit="return sendMessage(event)">
+    <input type="text" id="chat-input" placeholder="输入您的健康问题..." autocomplete="off" required>
+    <button type="submit" id="chat-submit">发送</button>
+  </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function sendMessage(e) {
+  e.preventDefault();
+  var input = document.getElementById('chat-input');
+  var msg = input.value.trim();
+  if (!msg) return false;
+
+  var btn = document.getElementById('chat-submit');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  appendMessage('user', msg, null);
+  input.value = '';
+
+  fetch('/api/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({patient_id: {{.PatientID}}, message: msg})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.reply) {
+      appendMessage('assistant', data.reply.content, data.reply);
+    } else if (data.error) {
+      appendMessage('assistant', '错误：' + data.error, null);
+    }
+  })
+  .catch(function(err) {
+    appendMessage('assistant', '网络错误，请稍后重试。', null);
+  })
+  .finally(function() {
+    btn.disabled = false;
+    btn.textContent = '发送';
+  });
+
+  return false;
+}
+
+function appendMessage(role, content, reply) {
+  var container = document.getElementById('chat-messages');
+  var div = document.createElement('div');
+  div.className = 'chat-msg chat-msg-' + role;
+
+  var label = document.createElement('div');
+  label.className = 'chat-msg-label';
+  label.textContent = role === 'user' ? '你' : '知愈';
+  div.appendChild(label);
+
+  var body = document.createElement('div');
+  body.className = 'chat-msg-content';
+  body.textContent = content;
+
+  if (role === 'assistant' && reply) {
+    var meta = document.createElement('div');
+    meta.className = 'chat-meta';
+
+    if (reply.sources && reply.sources.length > 0) {
+      var src = document.createElement('div');
+      src.className = 'chat-sources';
+      src.textContent = '📋 参考来源：' + reply.sources.join('、');
+      meta.appendChild(src);
+    }
+    if (reply.confidence) {
+      var conf = document.createElement('div');
+      conf.className = 'chat-confidence';
+      conf.textContent = '📊 置信度：' + reply.confidence;
+      meta.appendChild(conf);
+    }
+    var disc = document.createElement('div');
+    disc.className = 'chat-disclaimer';
+    disc.textContent = '⚠️ 以上内容仅供健康参考，不构成医疗建议。如有疑问请咨询专业医生。';
+    meta.appendChild(disc);
+
+    body.appendChild(meta);
+  }
+
+  div.appendChild(body);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+</script>
+{{end}}

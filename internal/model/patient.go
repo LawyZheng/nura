@@ -124,6 +124,18 @@ type MedicationLog struct {
 	Note         string    `json:"note,omitempty"`
 }
 
+// ChatMessage stores a single message in a patient's conversation history.
+type ChatMessage struct {
+	ID         int        `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID  int        `json:"patient_id" gorm:"not null;index"`
+	Role       string     `json:"role" gorm:"not null"` // "user" or "assistant"
+	Content    string     `json:"content" gorm:"not null"`
+	Sources    StringList `json:"sources,omitempty" gorm:"type:text"`
+	Confidence string     `json:"confidence,omitempty"`
+	RiskLevel  string     `json:"risk_level,omitempty"`
+	CreatedAt  time.Time  `json:"created_at" gorm:"autoCreateTime"`
+}
+
 // AIInsight caches an AI-generated insight.
 type AIInsight struct {
 	ID             int       `json:"id" gorm:"primaryKey;autoIncrement"`

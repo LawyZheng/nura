@@ -11,10 +11,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LawyZheng/nura/internal/chat"
 	"github.com/LawyZheng/nura/internal/model"
 	"github.com/LawyZheng/nura/internal/pipeline"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
+	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 )
@@ -51,8 +53,12 @@ func TestIntegration_FullFlow(t *testing.T) {
 		},
 	}
 	pe := policy.NewEngine()
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s)
+	srv := NewServer(agent, llm, s, ks)
 
 	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
@@ -171,5 +177,156 @@ func TestIntegration_FullFlow(t *testing.T) {
 	w = do("GET", "/api/reports/"+rid+"?patient_id=999", nil)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("cross-patient access: status = %d, want 404", w.Code)
+	}
+}
+
+// TestIntegration_ChatFlow exercises the Phase 2b chat flow:
+// create patient → send low-risk message → send high-risk message → send emergency →
+// verify history persistence → verify chat page renders.
+func TestIntegration_ChatFlow(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.New(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	defer s.Close()
+
+	llm := &providers.MockProvider{
+		CompleteFunc: func(_ context.Context, req providers.CompletionRequest) (*providers.CompletionResponse, error) {
+			// SYNTHETIC DATA - not real patient information
+			return &providers.CompletionResponse{
+				Content:    "合成回复：这是关于您提问的回答。",
+				StopReason: "end_turn",
+			}, nil
+		},
+	}
+	pe := policy.NewEngine()
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
+	agent := runtime.NewAgentRuntime(llm, pe, s)
+	srv := NewServer(agent, llm, s, ks)
+
+	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
+		t.Helper()
+		var req *http.Request
+		if body != nil {
+			req = httptest.NewRequest(method, path, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+		} else {
+			req = httptest.NewRequest(method, path, nil)
+		}
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, req)
+		return w
+	}
+
+	// Step 1: Create patient
+	// SYNTHETIC DATA - not real patient information
+	createBody, _ := json.Marshal(map[string]any{
+		"name": "Synthetic Chat Patient", "gender": "male",
+	})
+	w := do("POST", "/api/patient", createBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create patient: status = %d", w.Code)
+	}
+	var patient model.PatientProfile
+	json.NewDecoder(w.Body).Decode(&patient)
+	pid := patient.ID
+
+	// Step 2: Send low-risk message
+	chatBody, _ := json.Marshal(map[string]any{
+		"patient_id": pid,
+		"message":    "HP呼气试验是什么意思",
+	})
+	w = do("POST", "/api/chat", chatBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("low-risk chat: status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var chatResp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&chatResp)
+	var reply chat.ChatReply
+	json.Unmarshal(chatResp["reply"], &reply)
+	if reply.RiskLevel != "low" {
+		t.Errorf("expected low risk, got %q", reply.RiskLevel)
+	}
+	if reply.Disclaimer == "" {
+		t.Error("expected disclaimer on low-risk reply")
+	}
+	if len(reply.Sources) != 0 {
+		t.Errorf("expected no sources on low-risk, got %v", reply.Sources)
+	}
+
+	// Step 3: Send high-risk message (medication)
+	chatBody, _ = json.Marshal(map[string]any{
+		"patient_id": pid,
+		"message":    "奥美拉唑能不能停药",
+	})
+	w = do("POST", "/api/chat", chatBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("high-risk chat: status = %d", w.Code)
+	}
+	json.NewDecoder(w.Body).Decode(&chatResp)
+	json.Unmarshal(chatResp["reply"], &reply)
+	if reply.RiskLevel != "high" {
+		t.Errorf("expected high risk, got %q", reply.RiskLevel)
+	}
+	if len(reply.Sources) == 0 {
+		t.Error("expected RAG sources on high-risk reply")
+	}
+
+	// Step 4: Send emergency message
+	chatBody, _ = json.Marshal(map[string]any{
+		"patient_id": pid,
+		"message":    "我吐血了",
+	})
+	w = do("POST", "/api/chat", chatBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("emergency chat: status = %d", w.Code)
+	}
+	json.NewDecoder(w.Body).Decode(&chatResp)
+	json.Unmarshal(chatResp["reply"], &reply)
+	if reply.RiskLevel != "emergency" {
+		t.Errorf("expected emergency risk, got %q", reply.RiskLevel)
+	}
+	if !strings.Contains(reply.Content, "立即就医") && !strings.Contains(reply.Content, "急救") {
+		t.Error("expected emergency guidance")
+	}
+
+	// Step 5: Verify chat history persistence
+	w = do("GET", "/api/chat/history?patient_id="+strconv.Itoa(pid), nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("chat history: status = %d", w.Code)
+	}
+	var histResp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&histResp)
+	var msgs []model.ChatMessage
+	json.Unmarshal(histResp["messages"], &msgs)
+	// 3 user messages + 3 assistant replies = 6
+	if len(msgs) != 6 {
+		t.Errorf("expected 6 persisted messages, got %d", len(msgs))
+	}
+
+	// Step 6: Verify chat page renders
+	w = do("GET", "/patient/"+strconv.Itoa(pid)+"/chat", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("chat page: status = %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "与知愈对话") {
+		t.Error("expected chat page title")
+	}
+
+	// Step 7: Cross-patient chat isolation
+	// SYNTHETIC DATA - not real patient information
+	createBody2, _ := json.Marshal(map[string]any{"name": "Other Patient"})
+	w = do("POST", "/api/patient", createBody2)
+	var patient2 model.PatientProfile
+	json.NewDecoder(w.Body).Decode(&patient2)
+	w = do("GET", "/api/chat/history?patient_id="+strconv.Itoa(patient2.ID), nil)
+	json.NewDecoder(w.Body).Decode(&histResp)
+	json.Unmarshal(histResp["messages"], &msgs)
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages for other patient, got %d", len(msgs))
 	}
 }

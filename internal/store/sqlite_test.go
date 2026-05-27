@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -552,6 +553,98 @@ func TestStore_SupersedeMemorySummary(t *testing.T) {
 	}
 	if active[0].ID != newID {
 		t.Errorf("active summary id = %d, want %d", active[0].ID, newID)
+	}
+}
+
+func TestStore_ChatMessage(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	id, err := s.InsertChatMessage(&model.ChatMessage{
+		PatientID: pid,
+		Role:      "user",
+		Content:   "我现在在吃奥美拉唑，能不能停药？",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id <= 0 {
+		t.Errorf("expected positive id, got %d", id)
+	}
+
+	_, err = s.InsertChatMessage(&model.ChatMessage{
+		PatientID:  pid,
+		Role:       "assistant",
+		Content:    "奥美拉唑是质子泵抑制剂...",
+		Sources:    model.StringList{"HP根治四联疗法常用药物库"},
+		Confidence: "medium",
+		RiskLevel:  "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, err := s.ListRecentChatMessages(pid, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	// Should be in chronological order (ASC).
+	if msgs[0].Role != "user" {
+		t.Errorf("first message role = %q, want 'user'", msgs[0].Role)
+	}
+	if msgs[1].Role != "assistant" {
+		t.Errorf("second message role = %q, want 'assistant'", msgs[1].Role)
+	}
+	if len(msgs[1].Sources) != 1 || msgs[1].Sources[0] != "HP根治四联疗法常用药物库" {
+		t.Errorf("sources = %v, want [HP根治四联疗法常用药物库]", msgs[1].Sources)
+	}
+}
+
+func TestStore_ChatMessage_Isolation(t *testing.T) {
+	s := newTestStore(t)
+	pid1 := createTestPatient(t, s)
+	pid2, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Patient B"})
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertChatMessage(&model.ChatMessage{PatientID: pid1, Role: "user", Content: "p1 msg"})
+	s.InsertChatMessage(&model.ChatMessage{PatientID: pid2, Role: "user", Content: "p2 msg"})
+
+	m1, _ := s.ListRecentChatMessages(pid1, 10)
+	m2, _ := s.ListRecentChatMessages(pid2, 10)
+
+	if len(m1) != 1 || len(m2) != 1 {
+		t.Errorf("expected 1 each, got %d and %d", len(m1), len(m2))
+	}
+}
+
+func TestStore_ChatMessage_Limit(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	for i := 0; i < 5; i++ {
+		s.InsertChatMessage(&model.ChatMessage{
+			PatientID: pid, Role: "user", Content: fmt.Sprintf("msg %d", i),
+		})
+	}
+
+	msgs, err := s.ListRecentChatMessages(pid, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 messages with limit, got %d", len(msgs))
+	}
+	// Should return the 3 most recent in chronological order.
+	if msgs[0].Content != "msg 2" {
+		t.Errorf("first message = %q, want 'msg 2'", msgs[0].Content)
+	}
+	if msgs[2].Content != "msg 4" {
+		t.Errorf("last message = %q, want 'msg 4'", msgs[2].Content)
 	}
 }
 

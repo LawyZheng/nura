@@ -9,8 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/LawyZheng/nura/internal/chat"
 	"github.com/LawyZheng/nura/internal/pipeline"
+	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
+	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 	"github.com/LawyZheng/nura/internal/web"
@@ -26,17 +29,19 @@ type Server struct {
 	pipeline *pipeline.Pipeline
 	traces   *runtime.TraceStore
 	store    *store.Store
+	chatSvc  *chat.Service
 	engine   *gin.Engine
 	srv      *http.Server
 }
 
 // NewServer creates a new HTTP gateway.
-func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.Store) *Server {
+func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.Store, ks *rag.KnowledgeStore) *Server {
 	gw := &Server{
 		agent:    agent,
 		pipeline: pipeline.NewPipeline(llm, s),
 		traces:   agent.Traces(),
 		store:    s,
+		chatSvc:  chat.NewService(llm, policy.NewEngine(), ks, s),
 		engine:   gin.New(),
 	}
 	gw.engine.Use(gin.Recovery())
@@ -59,12 +64,15 @@ func (gw *Server) routes() {
 	api.POST("/patient", gw.handleCreatePatient)
 	api.PUT("/patient/:id", gw.handleUpdatePatient)
 	api.GET("/indicators", gw.handleListIndicators)
+	api.POST("/chat", gw.handleChat)
+	api.GET("/chat/history", gw.handleChatHistory)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
 	gw.engine.GET("/patient/:id", gw.handleDashboard)
 	gw.engine.GET("/patient/:id/reports", gw.handleReportList)
 	gw.engine.GET("/patient/:id/reports/:report_id", gw.handleReportDetail)
+	gw.engine.GET("/patient/:id/chat", gw.handleChatPage)
 	gw.engine.StaticFS("/static", web.StaticFS())
 }
 
