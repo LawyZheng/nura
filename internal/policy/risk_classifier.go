@@ -59,6 +59,11 @@ var mediumRiskKeywords = []string{
 	"symptom", "trend", "worse", "better",
 }
 
+// EmergencyKeywords returns the list of emergency trigger keywords.
+func EmergencyKeywords() []string {
+	return emergencyKeywords
+}
+
 // RiskClassifier classifies user intent into risk levels.
 type RiskClassifier struct{}
 

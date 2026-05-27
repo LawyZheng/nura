@@ -146,3 +146,15 @@ type AIInsight struct {
 	DataRangeEnd   string    `json:"data_range_end,omitempty"`
 	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
+
+// MedicationReminder represents a pending medication reminder.
+type MedicationReminder struct {
+	ID           int        `json:"id" gorm:"primaryKey;autoIncrement"`
+	MedicationID int        `json:"medication_id" gorm:"not null;index"`
+	PatientID    int        `json:"patient_id" gorm:"not null;index"`
+	ScheduledAt  time.Time  `json:"scheduled_at" gorm:"not null"`
+	Label        string     `json:"label,omitempty"`
+	IsDone       bool       `json:"is_done" gorm:"default:false"`
+	DoneAt       *time.Time `json:"done_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at" gorm:"autoCreateTime"`
+}
