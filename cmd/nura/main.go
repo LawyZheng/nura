@@ -134,12 +134,14 @@ func newServeCmd() *cobra.Command {
 }
 
 func newIngestCmd() *cobra.Command {
-	return &cobra.Command{
+	var patientID int
+
+	cmd := &cobra.Command{
 		Use:   "ingest <file>",
 		Short: "Ingest a report from file",
 		Long:  "Parse and ingest a medical report file through the extraction pipeline. The report is processed, normalized, and stored locally.",
-		Example: `  nura ingest report.txt
-  nura ingest /path/to/blood-work.pdf`,
+		Example: `  nura ingest --patient-id 1 report.txt
+  nura ingest --patient-id 1 /path/to/blood-work.pdf`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filePath := args[0]
@@ -156,10 +158,10 @@ func newIngestCmd() *cobra.Command {
 			s, llm, _ := initDeps(dataDir)
 			defer s.Close()
 
-			logger.Info("ingesting report", zap.String("file", filePath))
+			logger.Info("ingesting report", zap.String("file", filePath), zap.Int("patient_id", patientID))
 
 			p := pipeline.NewPipeline(llm, s)
-			result, err := p.Run(context.Background(), string(data), "2024-01-01")
+			result, err := p.Run(context.Background(), patientID, string(data), "2024-01-01")
 			if err != nil {
 				return fmt.Errorf("ingest: %w", err)
 			}
@@ -169,6 +171,10 @@ func newIngestCmd() *cobra.Command {
 			return enc.Encode(result)
 		},
 	}
+
+	cmd.Flags().IntVar(&patientID, "patient-id", 1, "patient profile ID")
+
+	return cmd
 }
 
 func newTraceCmd() *cobra.Command {

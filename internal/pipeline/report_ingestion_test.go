@@ -76,15 +76,25 @@ func newTestPipeline(t *testing.T) (*Pipeline, *store.Store) {
 	return NewPipeline(llm, s), s
 }
 
+func createTestPatient(t *testing.T, s *store.Store) int {
+	t.Helper()
+	id, err := s.CreatePatientProfile(&model.PatientProfile{Name: "Test Patient"})
+	if err != nil {
+		t.Fatalf("create patient: %v", err)
+	}
+	return id
+}
+
 func TestPipeline_GastroscopyReport(t *testing.T) {
 	p, s := newTestPipeline(t)
+	pid := createTestPatient(t, s)
 
 	rawText := `胃镜检查报告
 十二指肠球部：前壁可见一处溃疡，大小约 0.8×0.6cm，底覆白苔。
 分期：A2 期（活动期）。
 快速尿素酶试验：阳性（+）`
 
-	result, err := p.Run(context.Background(), rawText, "2024-03-01")
+	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +115,8 @@ func TestPipeline_GastroscopyReport(t *testing.T) {
 		t.Errorf("expected 5 stages, got %d", len(result.Stages))
 	}
 
-	// Check stored report.
-	reports, err := s.ListHealthReports()
+	// Check stored report is scoped to patient.
+	reports, err := s.ListHealthReports(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,9 +126,10 @@ func TestPipeline_GastroscopyReport(t *testing.T) {
 }
 
 func TestPipeline_StageNames(t *testing.T) {
-	p, _ := newTestPipeline(t)
+	p, s := newTestPipeline(t)
+	pid := createTestPatient(t, s)
 
-	result, err := p.Run(context.Background(), "test report", "2024-01-01")
+	result, err := p.Run(context.Background(), pid, "test report", "2024-01-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,8 +160,9 @@ func TestPipeline_WithSyntheticSample(t *testing.T) {
 		t.Skipf("sample data not found at %s: %v", samplePath, err)
 	}
 
-	p, _ := newTestPipeline(t)
-	result, err := p.Run(context.Background(), string(data), "2024-03-01")
+	p, s := newTestPipeline(t)
+	pid := createTestPatient(t, s)
+	result, err := p.Run(context.Background(), pid, string(data), "2024-03-01")
 	if err != nil {
 		t.Fatal(err)
 	}

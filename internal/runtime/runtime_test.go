@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/LawyZheng/nura/internal/model"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/store"
 	"github.com/LawyZheng/nura/internal/tools"
 )
 
-func newTestRuntime(t *testing.T) *AgentRuntime {
+func newTestRuntime(t *testing.T) (*AgentRuntime, int) {
 	t.Helper()
 	dir := t.TempDir()
 	s, err := store.New(filepath.Join(dir, "test.db"))
@@ -21,17 +22,23 @@ func newTestRuntime(t *testing.T) *AgentRuntime {
 	}
 	t.Cleanup(func() { s.Close() })
 
+	pid, err := s.CreatePatientProfile(&model.PatientProfile{Name: "Test Patient"})
+	if err != nil {
+		t.Fatalf("create patient: %v", err)
+	}
+
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
-	return NewAgentRuntime(llm, pe, s)
+	return NewAgentRuntime(llm, pe, s), pid
 }
 
 func TestAgentRuntime_Run_LowRisk(t *testing.T) {
-	rt := newTestRuntime(t)
+	rt, pid := newTestRuntime(t)
 
 	resp, err := rt.Run(context.Background(), RunRequest{
 		UserMessage: "什么是 DOB 值",
 		TaskHint:    "chat",
+		PatientID:   pid,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -48,10 +55,11 @@ func TestAgentRuntime_Run_LowRisk(t *testing.T) {
 }
 
 func TestAgentRuntime_Run_Emergency(t *testing.T) {
-	rt := newTestRuntime(t)
+	rt, pid := newTestRuntime(t)
 
 	resp, err := rt.Run(context.Background(), RunRequest{
 		UserMessage: "我在呕血怎么办",
+		PatientID:   pid,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -65,10 +73,11 @@ func TestAgentRuntime_Run_Emergency(t *testing.T) {
 }
 
 func TestAgentRuntime_Trace(t *testing.T) {
-	rt := newTestRuntime(t)
+	rt, pid := newTestRuntime(t)
 
 	resp, err := rt.Run(context.Background(), RunRequest{
 		UserMessage: "hello",
+		PatientID:   pid,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +99,7 @@ func TestAgentRuntime_Trace(t *testing.T) {
 }
 
 func TestAgentRuntime_GetTrace_NotFound(t *testing.T) {
-	rt := newTestRuntime(t)
+	rt, _ := newTestRuntime(t)
 	_, ok := rt.GetTrace("nonexistent")
 	if ok {
 		t.Error("expected not found")

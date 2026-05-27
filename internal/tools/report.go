@@ -12,6 +12,7 @@ import (
 
 // ReportIngestInput is the input for the report ingestion tool.
 type ReportIngestInput struct {
+	PatientID  int    `json:"patient_id"`
 	RawText    string `json:"raw_text"`
 	ReportDate string `json:"report_date"`
 	SourceType string `json:"source_type,omitempty"`
@@ -35,11 +36,12 @@ func (rt *ReportTool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
+			"patient_id":  {"type": "integer", "description": "Patient profile ID"},
 			"raw_text":    {"type": "string", "description": "Raw text content of the medical report"},
 			"report_date": {"type": "string", "description": "Date of the report (YYYY-MM-DD)"},
 			"source_type": {"type": "string", "description": "Source type: photo or pdf"}
 		},
-		"required": ["raw_text", "report_date"]
+		"required": ["patient_id", "raw_text", "report_date"]
 	}`)
 }
 
@@ -49,7 +51,7 @@ func (rt *ReportTool) Execute(ctx context.Context, input json.RawMessage) (ToolR
 		return ToolResult{}, fmt.Errorf("unmarshal input: %w", err)
 	}
 
-	result, err := rt.pipeline.Run(ctx, in.RawText, in.ReportDate)
+	result, err := rt.pipeline.Run(ctx, in.PatientID, in.RawText, in.ReportDate)
 	if err != nil {
 		return ToolResult{Error: err.Error()}, err
 	}

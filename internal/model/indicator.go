@@ -5,6 +5,7 @@ import "time"
 // MedicalIndicator is a normalized indicator extracted from a health report.
 type MedicalIndicator struct {
 	ID                int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID         int       `json:"patient_id" gorm:"not null;uniqueIndex:idx_indicator_dedup"`
 	ReportID          int       `json:"report_id" gorm:"not null;index"`
 	Category          string    `json:"category" gorm:"not null"`
 	IndicatorName     string    `json:"indicator_name" gorm:"not null;uniqueIndex:idx_indicator_dedup"`

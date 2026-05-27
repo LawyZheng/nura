@@ -10,12 +10,12 @@ import (
 
 // PatientState is the derived current state of the patient, built from raw events.
 type PatientState struct {
-	Profile          *model.PatientProfile   `json:"profile,omitempty"`
-	Diagnoses        []*model.Diagnosis      `json:"diagnoses,omitempty"`
-	ActiveMedications []*model.Medication    `json:"active_medications,omitempty"`
-	RecentSymptoms   []*model.SymptomLog     `json:"recent_symptoms,omitempty"`
+	Profile            *model.PatientProfile     `json:"profile,omitempty"`
+	Diagnoses          []*model.Diagnosis        `json:"diagnoses,omitempty"`
+	ActiveMedications  []*model.Medication       `json:"active_medications,omitempty"`
+	RecentSymptoms     []*model.SymptomLog       `json:"recent_symptoms,omitempty"`
 	AbnormalIndicators []*model.MedicalIndicator `json:"abnormal_indicators,omitempty"`
-	MemorySummaries  []*model.MemorySummary  `json:"memory_summaries,omitempty"`
+	MemorySummaries    []*model.MemorySummary    `json:"memory_summaries,omitempty"`
 }
 
 // StructuredState derives and queries the current patient state.
@@ -27,29 +27,29 @@ func NewStructuredState(s *store.Store) *StructuredState {
 	return &StructuredState{store: s}
 }
 
-// BuildState assembles the current patient state from all raw data.
-func (ss *StructuredState) BuildState() (*PatientState, error) {
-	profile, err := ss.store.GetPatientProfile()
+// BuildState assembles the current patient state from all raw data for the given patient.
+func (ss *StructuredState) BuildState(patientID int) (*PatientState, error) {
+	profile, err := ss.store.GetPatientProfile(patientID)
 	if err != nil {
 		profile = nil // no profile yet is fine
 	}
 
-	diagnoses, err := ss.store.ListDiagnoses()
+	diagnoses, err := ss.store.ListDiagnoses(patientID)
 	if err != nil {
 		return nil, fmt.Errorf("list diagnoses: %w", err)
 	}
 
-	meds, err := ss.store.ListActiveMedications()
+	meds, err := ss.store.ListActiveMedications(patientID)
 	if err != nil {
 		return nil, fmt.Errorf("list medications: %w", err)
 	}
 
-	symptoms, err := ss.store.ListSymptomLogs(10)
+	symptoms, err := ss.store.ListSymptomLogs(patientID, 10)
 	if err != nil {
 		return nil, fmt.Errorf("list symptoms: %w", err)
 	}
 
-	summaries, err := ss.store.GetActiveMemorySummaries()
+	summaries, err := ss.store.GetActiveMemorySummaries(patientID)
 	if err != nil {
 		return nil, fmt.Errorf("list summaries: %w", err)
 	}
@@ -65,8 +65,8 @@ func (ss *StructuredState) BuildState() (*PatientState, error) {
 
 // Summarize returns a human-readable summary of the current patient state
 // suitable for injecting into an LLM prompt.
-func (ss *StructuredState) Summarize() (string, error) {
-	state, err := ss.BuildState()
+func (ss *StructuredState) Summarize(patientID int) (string, error) {
+	state, err := ss.BuildState(patientID)
 	if err != nil {
 		return "", err
 	}

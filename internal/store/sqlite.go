@@ -24,7 +24,6 @@ func New(path string) (*Store, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
-	// Enable WAL mode for better concurrent read performance.
 	db.Exec("PRAGMA journal_mode=WAL")
 
 	s := &Store{db: db}
@@ -65,14 +64,20 @@ func (s *Store) migrate() error {
 
 // --- Patient Profile ---
 
-func (s *Store) UpsertPatientProfile(p *model.PatientProfile) error {
-	p.ID = 1
+func (s *Store) CreatePatientProfile(p *model.PatientProfile) (int, error) {
+	if err := s.db.Create(p).Error; err != nil {
+		return 0, err
+	}
+	return p.ID, nil
+}
+
+func (s *Store) UpdatePatientProfile(p *model.PatientProfile) error {
 	return s.db.Save(p).Error
 }
 
-func (s *Store) GetPatientProfile() (*model.PatientProfile, error) {
+func (s *Store) GetPatientProfile(patientID int) (*model.PatientProfile, error) {
 	var p model.PatientProfile
-	if err := s.db.First(&p, 1).Error; err != nil {
+	if err := s.db.First(&p, patientID).Error; err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -97,15 +102,15 @@ func (s *Store) GetHealthReport(id int) (*model.HealthReport, error) {
 
 func (s *Store) UpdateHealthReportProcessed(id int, aiType, aiSummary string) error {
 	return s.db.Model(&model.HealthReport{}).Where("id = ?", id).Updates(map[string]any{
-		"is_processed":      true,
+		"is_processed":       true,
 		"ai_classified_type": aiType,
-		"ai_summary":        aiSummary,
+		"ai_summary":         aiSummary,
 	}).Error
 }
 
-func (s *Store) ListHealthReports() ([]*model.HealthReport, error) {
+func (s *Store) ListHealthReports(patientID int) ([]*model.HealthReport, error) {
 	var reports []*model.HealthReport
-	if err := s.db.Order("report_date DESC").Find(&reports).Error; err != nil {
+	if err := s.db.Where("patient_id = ?", patientID).Order("report_date DESC").Find(&reports).Error; err != nil {
 		return nil, err
 	}
 	return reports, nil
@@ -114,22 +119,20 @@ func (s *Store) ListHealthReports() ([]*model.HealthReport, error) {
 // --- Medical Indicator ---
 
 func (s *Store) InsertIndicator(ind *model.MedicalIndicator) (int, error) {
-	// Use raw SQL for INSERT OR REPLACE to honor the unique dedup index.
 	result := s.db.Exec(`
 		INSERT OR REPLACE INTO medical_indicators
-		(report_id, category, indicator_name, indicator_name_cn, value, unit,
+		(patient_id, report_id, category, indicator_name, indicator_name_cn, value, unit,
 		 reference_low, reference_high, is_abnormal, abnormal_direction, measured_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ind.ReportID, ind.Category, ind.IndicatorName, ind.IndicatorNameCN,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ind.PatientID, ind.ReportID, ind.Category, ind.IndicatorName, ind.IndicatorNameCN,
 		ind.Value, ind.Unit, ind.ReferenceLow, ind.ReferenceHigh,
 		ind.IsAbnormal, ind.AbnormalDirection, ind.MeasuredAt,
 	)
 	if result.Error != nil {
 		return 0, result.Error
 	}
-	// Retrieve the ID of the inserted/replaced row.
 	var inserted model.MedicalIndicator
-	s.db.Where("indicator_name = ? AND measured_at = ?", ind.IndicatorName, ind.MeasuredAt).First(&inserted)
+	s.db.Where("patient_id = ? AND indicator_name = ? AND measured_at = ?", ind.PatientID, ind.IndicatorName, ind.MeasuredAt).First(&inserted)
 	return inserted.ID, nil
 }
 
@@ -141,9 +144,9 @@ func (s *Store) GetIndicatorsByReport(reportID int) ([]*model.MedicalIndicator, 
 	return indicators, nil
 }
 
-func (s *Store) GetIndicatorTimeline(indicatorName string) ([]*model.MedicalIndicator, error) {
+func (s *Store) GetIndicatorTimeline(patientID int, indicatorName string) ([]*model.MedicalIndicator, error) {
 	var indicators []*model.MedicalIndicator
-	if err := s.db.Where("indicator_name = ?", indicatorName).Order("measured_at").Find(&indicators).Error; err != nil {
+	if err := s.db.Where("patient_id = ? AND indicator_name = ?", patientID, indicatorName).Order("measured_at").Find(&indicators).Error; err != nil {
 		return nil, err
 	}
 	return indicators, nil
@@ -158,9 +161,9 @@ func (s *Store) InsertDiagnosis(d *model.Diagnosis) (int, error) {
 	return d.ID, nil
 }
 
-func (s *Store) ListDiagnoses() ([]*model.Diagnosis, error) {
+func (s *Store) ListDiagnoses(patientID int) ([]*model.Diagnosis, error) {
 	var diagnoses []*model.Diagnosis
-	if err := s.db.Order("diagnosis_date DESC").Find(&diagnoses).Error; err != nil {
+	if err := s.db.Where("patient_id = ?", patientID).Order("diagnosis_date DESC").Find(&diagnoses).Error; err != nil {
 		return nil, err
 	}
 	return diagnoses, nil
@@ -175,9 +178,9 @@ func (s *Store) InsertMemorySummary(m *model.MemorySummary) (int, error) {
 	return m.ID, nil
 }
 
-func (s *Store) GetActiveMemorySummaries() ([]*model.MemorySummary, error) {
+func (s *Store) GetActiveMemorySummaries(patientID int) ([]*model.MemorySummary, error) {
 	var summaries []*model.MemorySummary
-	if err := s.db.Where("superseded_by IS NULL").Order("category").Find(&summaries).Error; err != nil {
+	if err := s.db.Where("patient_id = ? AND superseded_by IS NULL", patientID).Order("category").Find(&summaries).Error; err != nil {
 		return nil, err
 	}
 	return summaries, nil
@@ -192,9 +195,9 @@ func (s *Store) InsertSymptomLog(sl *model.SymptomLog) (int, error) {
 	return sl.ID, nil
 }
 
-func (s *Store) ListSymptomLogs(limit int) ([]*model.SymptomLog, error) {
+func (s *Store) ListSymptomLogs(patientID int, limit int) ([]*model.SymptomLog, error) {
 	var logs []*model.SymptomLog
-	if err := s.db.Order("recorded_at DESC").Limit(limit).Find(&logs).Error; err != nil {
+	if err := s.db.Where("patient_id = ?", patientID).Order("recorded_at DESC").Limit(limit).Find(&logs).Error; err != nil {
 		return nil, err
 	}
 	return logs, nil
@@ -218,9 +221,9 @@ func (s *Store) InsertMedication(m *model.Medication) (int, error) {
 	return m.ID, nil
 }
 
-func (s *Store) ListActiveMedications() ([]*model.Medication, error) {
+func (s *Store) ListActiveMedications(patientID int) ([]*model.Medication, error) {
 	var meds []*model.Medication
-	if err := s.db.Where("is_active = ?", true).Order("course_start DESC").Find(&meds).Error; err != nil {
+	if err := s.db.Where("patient_id = ? AND is_active = ?", patientID, true).Order("course_start DESC").Find(&meds).Error; err != nil {
 		return nil, err
 	}
 	return meds, nil

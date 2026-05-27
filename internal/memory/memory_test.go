@@ -20,10 +20,10 @@ func newTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-func seedTestData(t *testing.T, s *store.Store) {
+func seedTestData(t *testing.T, s *store.Store) int {
 	t.Helper()
 
-	err := s.UpsertPatientProfile(&model.PatientProfile{
+	pid, err := s.CreatePatientProfile(&model.PatientProfile{
 		Name:      "Test Patient",
 		Gender:    "male",
 		BirthDate: "1990-06-15",
@@ -34,6 +34,7 @@ func seedTestData(t *testing.T, s *store.Store) {
 	}
 
 	_, err = s.InsertDiagnosis(&model.Diagnosis{
+		PatientID:     pid,
 		DiagnosisDate: "2024-03-01",
 		Condition:     "duodenal_ulcer",
 		Note:          "A2 stage",
@@ -43,10 +44,11 @@ func seedTestData(t *testing.T, s *store.Store) {
 	}
 
 	_, err = s.InsertMedication(&model.Medication{
-		Name:     "Omeprazole",
-		Category: "ppi",
-		Dosage:   "20mg",
-		IsActive: true,
+		PatientID: pid,
+		Name:      "Omeprazole",
+		Category:  "ppi",
+		Dosage:    "20mg",
+		IsActive:  true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +56,7 @@ func seedTestData(t *testing.T, s *store.Store) {
 
 	painScore := 4
 	_, err = s.InsertSymptomLog(&model.SymptomLog{
+		PatientID:    pid,
 		PainScore:    &painScore,
 		PainLocation: "upper_abdomen",
 		RecordedAt:   time.Now(),
@@ -63,6 +66,7 @@ func seedTestData(t *testing.T, s *store.Store) {
 	}
 
 	_, err = s.InsertHealthReport(&model.HealthReport{
+		PatientID:  pid,
 		ReportType: model.ReportGastroscopy,
 		ReportDate: "2024-03-01",
 		RawText:    "gastroscopy report text",
@@ -70,14 +74,16 @@ func seedTestData(t *testing.T, s *store.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	return pid
 }
 
 func TestRawEvents(t *testing.T) {
 	s := newTestStore(t)
-	seedTestData(t, s)
+	pid := seedTestData(t, s)
 	raw := NewRawEvents(s)
 
-	reports, err := raw.ListReports()
+	reports, err := raw.ListReports(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +91,7 @@ func TestRawEvents(t *testing.T) {
 		t.Errorf("expected 1 report, got %d", len(reports))
 	}
 
-	symptoms, err := raw.ListSymptoms(10)
+	symptoms, err := raw.ListSymptoms(pid, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +99,7 @@ func TestRawEvents(t *testing.T) {
 		t.Errorf("expected 1 symptom, got %d", len(symptoms))
 	}
 
-	meds, err := raw.ListActiveMedications()
+	meds, err := raw.ListActiveMedications(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +107,7 @@ func TestRawEvents(t *testing.T) {
 		t.Errorf("expected 1 medication, got %d", len(meds))
 	}
 
-	diags, err := raw.ListDiagnoses()
+	diags, err := raw.ListDiagnoses(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +118,10 @@ func TestRawEvents(t *testing.T) {
 
 func TestStructuredState_BuildState(t *testing.T) {
 	s := newTestStore(t)
-	seedTestData(t, s)
+	pid := seedTestData(t, s)
 	ss := NewStructuredState(s)
 
-	state, err := ss.BuildState()
+	state, err := ss.BuildState(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,10 +138,10 @@ func TestStructuredState_BuildState(t *testing.T) {
 
 func TestStructuredState_Summarize(t *testing.T) {
 	s := newTestStore(t)
-	seedTestData(t, s)
+	pid := seedTestData(t, s)
 	ss := NewStructuredState(s)
 
-	summary, err := ss.Summarize()
+	summary, err := ss.Summarize(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,22 +157,21 @@ func TestStructuredState_EmptyStore(t *testing.T) {
 	s := newTestStore(t)
 	ss := NewStructuredState(s)
 
-	state, err := ss.BuildState()
+	state, err := ss.BuildState(999)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if state.Profile != nil {
-		t.Error("expected nil profile for empty store")
+		t.Error("expected nil profile for nonexistent patient")
 	}
 }
 
 func TestContextBuilder_Build(t *testing.T) {
 	s := newTestStore(t)
-	seedTestData(t, s)
+	pid := seedTestData(t, s)
 	cb := NewContextBuilder(s)
 
-	// Report hint.
-	ctx, err := cb.Build("report")
+	ctx, err := cb.Build(pid, "report")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,8 +182,7 @@ func TestContextBuilder_Build(t *testing.T) {
 		t.Error("expected relevant facts for report hint")
 	}
 
-	// Medication hint.
-	ctx, err = cb.Build("medication")
+	ctx, err = cb.Build(pid, "medication")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,12 +190,30 @@ func TestContextBuilder_Build(t *testing.T) {
 		t.Error("expected relevant facts for medication hint")
 	}
 
-	// Generic hint.
-	ctx, err = cb.Build("chat")
+	ctx, err = cb.Build(pid, "chat")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ctx.PatientSummary == "" {
 		t.Error("expected patient summary even for generic hint")
+	}
+}
+
+func TestDataIsolation(t *testing.T) {
+	s := newTestStore(t)
+
+	pid1 := seedTestData(t, s)
+	pid2, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Other Patient"})
+
+	raw := NewRawEvents(s)
+
+	r1, _ := raw.ListReports(pid1)
+	r2, _ := raw.ListReports(pid2)
+
+	if len(r1) != 1 {
+		t.Errorf("patient 1 should have 1 report, got %d", len(r1))
+	}
+	if len(r2) != 0 {
+		t.Errorf("patient 2 should have 0 reports, got %d", len(r2))
 	}
 }

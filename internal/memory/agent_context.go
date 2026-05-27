@@ -29,8 +29,8 @@ func NewContextBuilder(s *store.Store) *ContextBuilder {
 
 // Build creates an AgentContext for the current task, incorporating patient state
 // and optionally relevant facts based on the task hint.
-func (cb *ContextBuilder) Build(taskHint string) (*AgentContext, error) {
-	summary, err := cb.state.Summarize()
+func (cb *ContextBuilder) Build(patientID int, taskHint string) (*AgentContext, error) {
+	summary, err := cb.state.Summarize(patientID)
 	if err != nil {
 		return nil, fmt.Errorf("build patient summary: %w", err)
 	}
@@ -41,7 +41,7 @@ func (cb *ContextBuilder) Build(taskHint string) (*AgentContext, error) {
 
 	switch {
 	case strings.Contains(taskHint, "report"):
-		reports, err := cb.raw.ListReports()
+		reports, err := cb.raw.ListReports(patientID)
 		if err == nil {
 			for _, r := range reports {
 				ctx.RelevantFacts = append(ctx.RelevantFacts,
@@ -50,7 +50,7 @@ func (cb *ContextBuilder) Build(taskHint string) (*AgentContext, error) {
 		}
 
 	case strings.Contains(taskHint, "symptom"):
-		symptoms, err := cb.raw.ListSymptoms(20)
+		symptoms, err := cb.raw.ListSymptoms(patientID, 20)
 		if err == nil {
 			for _, s := range symptoms {
 				fact := fmt.Sprintf("[%s] 疼痛评分:%v 位置:%s",
@@ -60,7 +60,7 @@ func (cb *ContextBuilder) Build(taskHint string) (*AgentContext, error) {
 		}
 
 	case strings.Contains(taskHint, "medication"):
-		meds, err := cb.raw.ListActiveMedications()
+		meds, err := cb.raw.ListActiveMedications(patientID)
 		if err == nil {
 			for _, m := range meds {
 				ctx.RelevantFacts = append(ctx.RelevantFacts,

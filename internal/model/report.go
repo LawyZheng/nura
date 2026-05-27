@@ -21,6 +21,7 @@ const (
 // HealthReport stores a raw health report and its processing state.
 type HealthReport struct {
 	ID               int        `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID        int        `json:"patient_id" gorm:"not null;index"`
 	ReportType       ReportType `json:"report_type" gorm:"type:text;not null"`
 	ReportDate       string     `json:"report_date" gorm:"not null"`
 	Institution      string     `json:"institution,omitempty"`

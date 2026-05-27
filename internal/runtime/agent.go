@@ -15,7 +15,7 @@ import (
 type RunRequest struct {
 	UserMessage string `json:"user_message"`
 	TaskHint    string `json:"task_hint,omitempty"` // chat / report_ingest / visit_summary
-	PatientID   string `json:"patient_id,omitempty"`
+	PatientID   int    `json:"patient_id"`
 }
 
 // RunResponse is the structured output of an agent run.
@@ -123,7 +123,7 @@ func (ar *AgentRuntime) Run(ctx context.Context, req RunRequest) (*RunResponse, 
 
 	// Step 3: Build context.
 	ctxIdx := tracer.StartStep("plan", "build_context", req.TaskHint)
-	agentCtx, err := ar.ctxBuild.Build(req.TaskHint)
+	agentCtx, err := ar.ctxBuild.Build(req.PatientID, req.TaskHint)
 	if err != nil {
 		tracer.EndStep(ctxIdx, "", err.Error())
 		// Non-fatal: continue without context.

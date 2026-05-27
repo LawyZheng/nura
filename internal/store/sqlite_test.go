@@ -19,10 +19,22 @@ func newTestStore(t *testing.T) *Store {
 	return s
 }
 
+func createTestPatient(t *testing.T, s *Store) int {
+	t.Helper()
+	id, err := s.CreatePatientProfile(&model.PatientProfile{
+		Name:   "Test Patient",
+		Gender: "male",
+	})
+	if err != nil {
+		t.Fatalf("create patient: %v", err)
+	}
+	return id
+}
+
 func TestStore_PatientProfile(t *testing.T) {
 	s := newTestStore(t)
 
-	err := s.UpsertPatientProfile(&model.PatientProfile{
+	id, err := s.CreatePatientProfile(&model.PatientProfile{
 		Name:      "Test Patient",
 		Gender:    "male",
 		BirthDate: "1990-01-01",
@@ -33,8 +45,11 @@ func TestStore_PatientProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if id <= 0 {
+		t.Errorf("expected positive id, got %d", id)
+	}
 
-	p, err := s.GetPatientProfile()
+	p, err := s.GetPatientProfile(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,14 +64,13 @@ func TestStore_PatientProfile(t *testing.T) {
 	}
 
 	// Update.
-	err = s.UpsertPatientProfile(&model.PatientProfile{
-		Name:   "Updated Patient",
-		Weight: 72,
-	})
+	p.Name = "Updated Patient"
+	p.Weight = 72
+	err = s.UpdatePatientProfile(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err = s.GetPatientProfile()
+	p, err = s.GetPatientProfile(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,10 +79,29 @@ func TestStore_PatientProfile(t *testing.T) {
 	}
 }
 
-func TestStore_HealthReport(t *testing.T) {
+func TestStore_MultiplePatients(t *testing.T) {
 	s := newTestStore(t)
 
+	id1, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Patient A"})
+	id2, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Patient B"})
+
+	if id1 == id2 {
+		t.Error("expected different IDs for different patients")
+	}
+
+	p1, _ := s.GetPatientProfile(id1)
+	p2, _ := s.GetPatientProfile(id2)
+	if p1.Name != "Patient A" || p2.Name != "Patient B" {
+		t.Errorf("names = %q, %q; want 'Patient A', 'Patient B'", p1.Name, p2.Name)
+	}
+}
+
+func TestStore_HealthReport(t *testing.T) {
+	s := newTestStore(t)
+	pid := createTestPatient(t, s)
+
 	id, err := s.InsertHealthReport(&model.HealthReport{
+		PatientID:  pid,
 		ReportType: model.ReportGastroscopy,
 		ReportDate: "2024-03-01",
 		RawText:    "test report content",
@@ -87,8 +120,8 @@ func TestStore_HealthReport(t *testing.T) {
 	if r.ReportType != model.ReportGastroscopy {
 		t.Errorf("report_type = %q, want gastroscopy", r.ReportType)
 	}
-	if r.RawText != "test report content" {
-		t.Errorf("raw_text = %q, want 'test report content'", r.RawText)
+	if r.PatientID != pid {
+		t.Errorf("patient_id = %d, want %d", r.PatientID, pid)
 	}
 
 	// Update processed.
@@ -105,10 +138,28 @@ func TestStore_HealthReport(t *testing.T) {
 	}
 }
 
+func TestStore_HealthReport_Isolation(t *testing.T) {
+	s := newTestStore(t)
+	pid1 := createTestPatient(t, s)
+	pid2, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Patient B"})
+
+	s.InsertHealthReport(&model.HealthReport{PatientID: pid1, ReportType: model.ReportGastroscopy, ReportDate: "2024-01-01", RawText: "p1"})
+	s.InsertHealthReport(&model.HealthReport{PatientID: pid2, ReportType: model.ReportBloodRoutine, ReportDate: "2024-01-01", RawText: "p2"})
+
+	r1, _ := s.ListHealthReports(pid1)
+	r2, _ := s.ListHealthReports(pid2)
+
+	if len(r1) != 1 || len(r2) != 1 {
+		t.Errorf("expected 1 report each, got %d and %d", len(r1), len(r2))
+	}
+}
+
 func TestStore_MedicalIndicator(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	reportID, _ := s.InsertHealthReport(&model.HealthReport{
+		PatientID:  pid,
 		ReportType: model.ReportBloodRoutine,
 		ReportDate: "2024-03-01",
 		RawText:    "blood test",
@@ -117,6 +168,7 @@ func TestStore_MedicalIndicator(t *testing.T) {
 	refLow := 130.0
 	refHigh := 175.0
 	_, err := s.InsertIndicator(&model.MedicalIndicator{
+		PatientID:         pid,
 		ReportID:          reportID,
 		Category:          "blood",
 		IndicatorName:     "hemoglobin",
@@ -144,8 +196,7 @@ func TestStore_MedicalIndicator(t *testing.T) {
 		t.Errorf("indicator name = %q, want 'hemoglobin'", indicators[0].IndicatorName)
 	}
 
-	// Timeline query.
-	timeline, err := s.GetIndicatorTimeline("hemoglobin")
+	timeline, err := s.GetIndicatorTimeline(pid, "hemoglobin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,8 +207,10 @@ func TestStore_MedicalIndicator(t *testing.T) {
 
 func TestStore_Diagnosis(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	id, err := s.InsertDiagnosis(&model.Diagnosis{
+		PatientID:     pid,
 		DiagnosisDate: "2024-03-01",
 		Condition:     "duodenal_ulcer",
 		Detail:        `{"stage":"A2","size":"0.8x0.6cm"}`,
@@ -170,7 +223,7 @@ func TestStore_Diagnosis(t *testing.T) {
 		t.Errorf("expected positive id, got %d", id)
 	}
 
-	diagnoses, err := s.ListDiagnoses()
+	diagnoses, err := s.ListDiagnoses(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,9 +237,11 @@ func TestStore_Diagnosis(t *testing.T) {
 
 func TestStore_SymptomLog(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	painScore := 5
 	_, err := s.InsertSymptomLog(&model.SymptomLog{
+		PatientID:    pid,
 		PainScore:    &painScore,
 		PainLocation: "upper_abdomen",
 		PainTiming:   "fasting",
@@ -198,7 +253,7 @@ func TestStore_SymptomLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logs, err := s.ListSymptomLogs(10)
+	logs, err := s.ListSymptomLogs(pid, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +267,10 @@ func TestStore_SymptomLog(t *testing.T) {
 
 func TestStore_Medication(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	_, err := s.InsertMedication(&model.Medication{
+		PatientID:   pid,
 		Name:        "Omeprazole",
 		Category:    "ppi",
 		Dosage:      "20mg",
@@ -226,7 +283,7 @@ func TestStore_Medication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	meds, err := s.ListActiveMedications()
+	meds, err := s.ListActiveMedications(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,16 +297,18 @@ func TestStore_Medication(t *testing.T) {
 
 func TestStore_MemorySummary(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	_, err := s.InsertMemorySummary(&model.MemorySummary{
-		Category: "symptom_pattern",
-		Content:  "Patient reports worsening pain after spicy food",
+		PatientID: pid,
+		Category:  "symptom_pattern",
+		Content:   "Patient reports worsening pain after spicy food",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	summaries, err := s.GetActiveMemorySummaries()
+	summaries, err := s.GetActiveMemorySummaries(pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,8 +319,10 @@ func TestStore_MemorySummary(t *testing.T) {
 
 func TestStore_MealLog(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	_, err := s.InsertMealLog(&model.MealLog{
+		PatientID:   pid,
 		MealType:    "lunch",
 		Content:     "rice and steamed fish",
 		HasIrritant: false,
@@ -274,8 +335,10 @@ func TestStore_MealLog(t *testing.T) {
 
 func TestStore_AIInsight(t *testing.T) {
 	s := newTestStore(t)
+	pid := createTestPatient(t, s)
 
 	_, err := s.InsertAIInsight(&model.AIInsight{
+		PatientID:   pid,
 		InsightType: "trend",
 		Content:     "Pain scores improving over last 7 days",
 	})

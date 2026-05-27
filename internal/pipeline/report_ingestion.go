@@ -41,8 +41,8 @@ func NewPipeline(llm providers.LLMProvider, s *store.Store) *Pipeline {
 	return &Pipeline{llm: llm, store: s}
 }
 
-// Run executes the full ingestion pipeline on a raw report.
-func (p *Pipeline) Run(ctx context.Context, rawText, reportDate string) (*IngestionResult, error) {
+// Run executes the full ingestion pipeline on a raw report for the given patient.
+func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate string) (*IngestionResult, error) {
 	result := &IngestionResult{}
 
 	// Stage 1: Classify report type.
@@ -70,7 +70,7 @@ func (p *Pipeline) Run(ctx context.Context, rawText, reportDate string) (*Ingest
 	result.Stages = append(result.Stages, normalizeResult)
 
 	// Stage 4: Merge with existing state.
-	mergeActions, mergeResult, err := p.mergeState(ctx, indicators, reportType, rawText, reportDate)
+	mergeActions, mergeResult, err := p.mergeState(ctx, patientID, indicators, reportType, rawText, reportDate)
 	if err != nil {
 		return nil, fmt.Errorf("merge: %w", err)
 	}
@@ -194,12 +194,13 @@ func (p *Pipeline) normalizeIndicators(facts map[string]any, reportType model.Re
 	return indicators, stage, nil
 }
 
-func (p *Pipeline) mergeState(ctx context.Context, indicators []*model.MedicalIndicator, reportType model.ReportType, rawText, reportDate string) ([]string, StageResult, error) {
+func (p *Pipeline) mergeState(ctx context.Context, patientID int, indicators []*model.MedicalIndicator, reportType model.ReportType, rawText, reportDate string) ([]string, StageResult, error) {
 	stage := StageResult{StageName: "merge_state"}
 	var actions []string
 
 	// Store the report.
 	reportID, err := p.store.InsertHealthReport(&model.HealthReport{
+		PatientID:  patientID,
 		ReportType: reportType,
 		ReportDate: reportDate,
 		RawText:    rawText,
@@ -212,6 +213,7 @@ func (p *Pipeline) mergeState(ctx context.Context, indicators []*model.MedicalIn
 
 	// Store normalized indicators.
 	for _, ind := range indicators {
+		ind.PatientID = patientID
 		ind.ReportID = reportID
 		id, err := p.store.InsertIndicator(ind)
 		if err != nil {

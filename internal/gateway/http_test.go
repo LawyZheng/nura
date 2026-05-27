@@ -8,13 +8,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/LawyZheng/nura/internal/model"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 )
 
-func newTestServer(t *testing.T) *Server {
+func newTestServer(t *testing.T) (*Server, int) {
 	t.Helper()
 	dir := t.TempDir()
 	s, err := store.New(filepath.Join(dir, "test.db"))
@@ -23,14 +24,19 @@ func newTestServer(t *testing.T) *Server {
 	}
 	t.Cleanup(func() { s.Close() })
 
+	pid, err := s.CreatePatientProfile(&model.PatientProfile{Name: "Test Patient"})
+	if err != nil {
+		t.Fatalf("create patient: %v", err)
+	}
+
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	return NewServer(agent, llm, s)
+	return NewServer(agent, llm, s), pid
 }
 
 func TestHealth(t *testing.T) {
-	srv := newTestServer(t)
+	srv, _ := newTestServer(t)
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
 
@@ -47,9 +53,9 @@ func TestHealth(t *testing.T) {
 }
 
 func TestAgentRun(t *testing.T) {
-	srv := newTestServer(t)
+	srv, pid := newTestServer(t)
 
-	body, _ := json.Marshal(agentRunRequest{UserMessage: "什么是 DOB 值"})
+	body, _ := json.Marshal(agentRunRequest{UserMessage: "什么是 DOB 值", PatientID: pid})
 	req := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -72,9 +78,10 @@ func TestAgentRun(t *testing.T) {
 	}
 }
 
-func TestAgentRun_EmptyMessage(t *testing.T) {
-	srv := newTestServer(t)
+func TestAgentRun_MissingFields(t *testing.T) {
+	srv, _ := newTestServer(t)
 
+	// Missing both user_message and patient_id.
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -88,7 +95,7 @@ func TestAgentRun_EmptyMessage(t *testing.T) {
 }
 
 func TestAgentRun_MethodNotAllowed(t *testing.T) {
-	srv := newTestServer(t)
+	srv, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/agent/run", nil)
 	w := httptest.NewRecorder()
@@ -101,11 +108,12 @@ func TestAgentRun_MethodNotAllowed(t *testing.T) {
 }
 
 func TestReportIngest(t *testing.T) {
-	srv := newTestServer(t)
+	srv, pid := newTestServer(t)
 
 	body, _ := json.Marshal(reportIngestRequest{
 		RawText:    "test report content",
 		ReportDate: "2024-03-01",
+		PatientID:  pid,
 	})
 	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -118,8 +126,8 @@ func TestReportIngest(t *testing.T) {
 	}
 }
 
-func TestReportIngest_EmptyText(t *testing.T) {
-	srv := newTestServer(t)
+func TestReportIngest_MissingFields(t *testing.T) {
+	srv, _ := newTestServer(t)
 
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
@@ -134,7 +142,7 @@ func TestReportIngest_EmptyText(t *testing.T) {
 }
 
 func TestTrace_NotFound(t *testing.T) {
-	srv := newTestServer(t)
+	srv, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/agent/debug/trace/nonexistent-id", nil)
 	w := httptest.NewRecorder()
@@ -147,10 +155,9 @@ func TestTrace_NotFound(t *testing.T) {
 }
 
 func TestTrace_AfterRun(t *testing.T) {
-	srv := newTestServer(t)
+	srv, pid := newTestServer(t)
 
-	// First, do an agent run to create a trace.
-	runBody, _ := json.Marshal(agentRunRequest{UserMessage: "test"})
+	runBody, _ := json.Marshal(agentRunRequest{UserMessage: "test", PatientID: pid})
 	runReq := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(runBody))
 	runReq.Header.Set("Content-Type", "application/json")
 	runW := httptest.NewRecorder()
@@ -159,7 +166,6 @@ func TestTrace_AfterRun(t *testing.T) {
 	var runResp runtime.RunResponse
 	json.NewDecoder(runW.Body).Decode(&runResp)
 
-	// Then retrieve the trace.
 	traceReq := httptest.NewRequest("GET", "/agent/debug/trace/"+runResp.TraceID, nil)
 	traceW := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(traceW, traceReq)
@@ -170,7 +176,7 @@ func TestTrace_AfterRun(t *testing.T) {
 }
 
 func TestCORS_Preflight(t *testing.T) {
-	srv := newTestServer(t)
+	srv, _ := newTestServer(t)
 
 	req := httptest.NewRequest("OPTIONS", "/health", nil)
 	req.Header.Set("Origin", "http://localhost:3000")

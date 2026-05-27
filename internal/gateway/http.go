@@ -115,7 +115,7 @@ func (gw *Server) handleHealth(c *gin.Context) {
 type agentRunRequest struct {
 	UserMessage string `json:"user_message" binding:"required"`
 	TaskHint    string `json:"task_hint,omitempty"`
-	PatientID   string `json:"patient_id,omitempty"`
+	PatientID   int    `json:"patient_id" binding:"required"`
 }
 
 // @Summary Run agent
@@ -131,7 +131,7 @@ type agentRunRequest struct {
 func (gw *Server) handleAgentRun(c *gin.Context) {
 	var req agentRunRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_message is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_message and patient_id are required"})
 		return
 	}
 
@@ -154,7 +154,7 @@ type reportIngestRequest struct {
 	RawText    string `json:"raw_text" binding:"required"`
 	ReportDate string `json:"report_date"`
 	SourceType string `json:"source_type,omitempty"`
-	PatientID  string `json:"patient_id,omitempty"`
+	PatientID  int    `json:"patient_id" binding:"required"`
 }
 
 // @Summary Ingest medical report
@@ -170,11 +170,11 @@ type reportIngestRequest struct {
 func (gw *Server) handleReportIngest(c *gin.Context) {
 	var req reportIngestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "raw_text is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "raw_text and patient_id are required"})
 		return
 	}
 
-	result, err := gw.pipeline.Run(c.Request.Context(), req.RawText, req.ReportDate)
+	result, err := gw.pipeline.Run(c.Request.Context(), req.PatientID, req.RawText, req.ReportDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

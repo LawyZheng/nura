@@ -35,9 +35,9 @@ func (s *StringList) Scan(value any) error {
 	return json.Unmarshal(bytes, s)
 }
 
-// PatientProfile represents the single local patient.
+// PatientProfile represents a patient user. Multiple profiles can coexist.
 type PatientProfile struct {
-	ID           int        `json:"id" gorm:"primaryKey;check:id = 1"`
+	ID           int        `json:"id" gorm:"primaryKey;autoIncrement"`
 	Name         string     `json:"name,omitempty"`
 	Gender       string     `json:"gender,omitempty"`
 	BirthDate    string     `json:"birth_date,omitempty"`
@@ -51,6 +51,7 @@ type PatientProfile struct {
 // Diagnosis records a diagnostic event linked to a health report.
 type Diagnosis struct {
 	ID             int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID      int       `json:"patient_id" gorm:"not null;index"`
 	DiagnosisDate  string    `json:"diagnosis_date" gorm:"not null"`
 	Condition      string    `json:"condition" gorm:"not null"`
 	Detail         string    `json:"detail"`
@@ -62,6 +63,7 @@ type Diagnosis struct {
 // MemorySummary stores AI-generated summaries injected into prompts.
 type MemorySummary struct {
 	ID             int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID      int       `json:"patient_id" gorm:"not null;index"`
 	Category       string    `json:"category" gorm:"not null"`
 	Content        string    `json:"content" gorm:"not null"`
 	DataRangeStart string    `json:"data_range_start,omitempty"`
@@ -73,6 +75,7 @@ type MemorySummary struct {
 // SymptomLog records a single symptom entry.
 type SymptomLog struct {
 	ID           int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID    int       `json:"patient_id" gorm:"not null;index"`
 	PainScore    *int      `json:"pain_score,omitempty"`
 	PainLocation string    `json:"pain_location,omitempty"`
 	PainTiming   string    `json:"pain_timing,omitempty"`
@@ -88,6 +91,7 @@ type SymptomLog struct {
 // MealLog records a single meal entry.
 type MealLog struct {
 	ID             int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID      int       `json:"patient_id" gorm:"not null;index"`
 	MealType       string    `json:"meal_type" gorm:"not null"`
 	Content        string    `json:"content" gorm:"not null"`
 	HasIrritant    bool      `json:"has_irritant" gorm:"default:false"`
@@ -99,6 +103,7 @@ type MealLog struct {
 // Medication represents a medication regimen.
 type Medication struct {
 	ID          int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID   int       `json:"patient_id" gorm:"not null;index"`
 	Name        string    `json:"name" gorm:"not null"`
 	Category    string    `json:"category,omitempty"`
 	Dosage      string    `json:"dosage,omitempty"`
@@ -122,6 +127,7 @@ type MedicationLog struct {
 // AIInsight caches an AI-generated insight.
 type AIInsight struct {
 	ID             int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	PatientID      int       `json:"patient_id" gorm:"not null;index"`
 	InsightType    string    `json:"insight_type" gorm:"not null"`
 	Content        string    `json:"content" gorm:"not null"`
 	DataRangeStart string    `json:"data_range_start,omitempty"`
