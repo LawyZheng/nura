@@ -65,6 +65,8 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newServeCmd())
 	root.AddCommand(newIngestCmd())
 	root.AddCommand(newTraceCmd())
+	root.AddCommand(newExportCmd())
+	root.AddCommand(newImportCmd())
 	root.AddCommand(newVersionCmd())
 
 	return root
@@ -200,6 +202,100 @@ func newTraceCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newExportCmd() *cobra.Command {
+	var (
+		patientID int
+		output    string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export patient data as JSON",
+		Long:  "Dump all data for a patient (profile, reports, indicators, symptoms, medications, diagnoses) as a JSON file for backup or migration.",
+		Example: `  nura export --patient-id 1 --output backup.json
+  nura export --patient-id 1`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dataDir := cfg.Server.DataDir
+			if err := os.MkdirAll(dataDir, 0o755); err != nil {
+				return fmt.Errorf("create data dir: %w", err)
+			}
+
+			s, _, _ := initDeps(dataDir)
+			defer s.Close()
+
+			logger.Info("exporting patient data", zap.Int("patient_id", patientID))
+
+			data, err := s.ExportPatientJSON(patientID)
+			if err != nil {
+				return fmt.Errorf("export: %w", err)
+			}
+
+			if output != "" {
+				if err := os.WriteFile(output, data, 0o644); err != nil {
+					return fmt.Errorf("write file: %w", err)
+				}
+				logger.Info("exported", zap.String("file", output), zap.Int("bytes", len(data)))
+			} else {
+				fmt.Println(string(data))
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&patientID, "patient-id", 1, "patient profile ID to export")
+	cmd.Flags().StringVarP(&output, "output", "o", "", "output file path (default: stdout)")
+
+	return cmd
+}
+
+func newImportCmd() *cobra.Command {
+	var patientID int
+
+	cmd := &cobra.Command{
+		Use:   "import <file>",
+		Short: "Import patient data from JSON",
+		Long:  "Restore patient data from a previously exported JSON file. Data is imported into the specified patient profile.",
+		Example: `  nura import --patient-id 1 backup.json`,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			filePath := args[0]
+			raw, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("read file: %w", err)
+			}
+
+			var export store.PatientExport
+			if err := json.Unmarshal(raw, &export); err != nil {
+				return fmt.Errorf("parse JSON: %w", err)
+			}
+
+			dataDir := cfg.Server.DataDir
+			if err := os.MkdirAll(dataDir, 0o755); err != nil {
+				return fmt.Errorf("create data dir: %w", err)
+			}
+
+			s, _, _ := initDeps(dataDir)
+			defer s.Close()
+
+			logger.Info("importing patient data",
+				zap.Int("patient_id", patientID),
+				zap.String("file", filePath),
+			)
+
+			if err := s.ImportPatient(patientID, &export); err != nil {
+				return fmt.Errorf("import: %w", err)
+			}
+
+			logger.Info("import complete")
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&patientID, "patient-id", 1, "patient profile ID to import into")
+
+	return cmd
 }
 
 func newVersionCmd() *cobra.Command {
