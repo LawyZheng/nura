@@ -486,6 +486,29 @@ func TestWeb_Dashboard(t *testing.T) {
 	}
 }
 
+func TestWeb_ReportList(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/reports", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "检查报告") {
+		t.Error("expected page to contain '检查报告'")
+	}
+	if !strings.Contains(body, "上传新报告") {
+		t.Error("expected upload form")
+	}
+	if !strings.Contains(body, "胃镜") {
+		t.Error("expected gastroscopy report in list")
+	}
+}
+
 func TestWeb_Dashboard_NotFound(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
