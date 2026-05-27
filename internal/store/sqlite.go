@@ -59,6 +59,7 @@ func (s *Store) migrate() error {
 		&model.Medication{},
 		&model.MedicationLog{},
 		&model.AIInsight{},
+		&model.ChatMessage{},
 	)
 }
 
@@ -279,6 +280,27 @@ func (s *Store) SupersedeMemorySummary(oldID, newID int) error {
 }
 
 // --- AI Insight ---
+
+// --- Chat Message ---
+
+func (s *Store) InsertChatMessage(m *model.ChatMessage) (int, error) {
+	if err := s.db.Create(m).Error; err != nil {
+		return 0, err
+	}
+	return m.ID, nil
+}
+
+func (s *Store) ListRecentChatMessages(patientID int, limit int) ([]*model.ChatMessage, error) {
+	var msgs []*model.ChatMessage
+	sub := s.db.Where("patient_id = ?", patientID).Order("id DESC").Limit(limit)
+	if err := sub.Find(&msgs).Error; err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+	return msgs, nil
+}
 
 func (s *Store) InsertAIInsight(ai *model.AIInsight) (int, error) {
 	if err := s.db.Create(ai).Error; err != nil {
