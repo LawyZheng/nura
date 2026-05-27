@@ -1137,6 +1137,32 @@ func TestAPI_GetTrends_MissingPatientID(t *testing.T) {
 	}
 }
 
+func TestAPI_GenerateInsight(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"patient_id": pid,
+		"days":       7,
+	})
+	req := httptest.NewRequest("POST", "/api/trends/insight", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["insight"]; !ok {
+		t.Error("missing 'insight' field")
+	}
+	if _, ok := resp["disclaimer"]; !ok {
+		t.Error("missing 'disclaimer' field")
+	}
+}
+
 func TestWeb_TrendsPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 

@@ -46,6 +46,31 @@ func (gw *Server) handleGetTrends(c *gin.Context) {
 	})
 }
 
+type generateInsightRequest struct {
+	PatientID int `json:"patient_id" binding:"required"`
+	Days      int `json:"days"`
+}
+
+func (gw *Server) handleGenerateInsight(c *gin.Context) {
+	var req generateInsightRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "patient_id is required"})
+		return
+	}
+
+	if req.Days <= 0 {
+		req.Days = 7
+	}
+
+	result, err := gw.trendSvc.GenerateInsight(c.Request.Context(), req.PatientID, req.Days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func (gw *Server) handleTrendsPage(c *gin.Context) {
 	pid, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

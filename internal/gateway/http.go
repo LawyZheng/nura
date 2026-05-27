@@ -16,6 +16,7 @@ import (
 	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
+	"github.com/LawyZheng/nura/internal/trend"
 	"github.com/LawyZheng/nura/internal/web"
 )
 
@@ -30,6 +31,7 @@ type Server struct {
 	traces   *runtime.TraceStore
 	store    *store.Store
 	chatSvc  *chat.Service
+	trendSvc *trend.Service
 	engine   *gin.Engine
 	srv      *http.Server
 }
@@ -42,6 +44,7 @@ func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.
 		traces:   agent.Traces(),
 		store:    s,
 		chatSvc:  chat.NewService(llm, policy.NewEngine(), ks, s),
+		trendSvc: trend.NewService(llm, s),
 		engine:   gin.New(),
 	}
 	gw.engine.Use(gin.Recovery())
@@ -76,6 +79,7 @@ func (gw *Server) routes() {
 	api.POST("/medications/:id/log", gw.handleCreateMedicationLog)
 	api.GET("/medications/:id/logs", gw.handleListMedicationLogs)
 	api.GET("/trends", gw.handleGetTrends)
+	api.POST("/trends/insight", gw.handleGenerateInsight)
 
 	// Web UI
 	gw.engine.GET("/", gw.handleIndex)
