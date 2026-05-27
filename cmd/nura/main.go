@@ -19,6 +19,7 @@ import (
 	"github.com/LawyZheng/nura/internal/pipeline"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
+	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 )
@@ -111,8 +112,19 @@ func newServeCmd() *cobra.Command {
 			s, llm, pe := initDeps(dataDir)
 			defer s.Close()
 
+			knowledgeDir := filepath.Join(dataDir, "knowledge")
+			// Fall back to embedded knowledge directory next to binary.
+			if _, err := os.Stat(knowledgeDir); os.IsNotExist(err) {
+				exe, _ := os.Executable()
+				knowledgeDir = filepath.Join(filepath.Dir(exe), "knowledge")
+			}
+			ks, err := rag.LoadFromDir(knowledgeDir)
+			if err != nil {
+				logger.Warn("knowledge base not loaded, RAG disabled", zap.Error(err))
+			}
+
 			agent := runtime.NewAgentRuntime(llm, pe, s)
-			srv := gateway.NewServer(agent, llm, s)
+			srv := gateway.NewServer(agent, llm, s, ks)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -254,9 +266,9 @@ func newImportCmd() *cobra.Command {
 	var patientID int
 
 	cmd := &cobra.Command{
-		Use:   "import <file>",
-		Short: "Import patient data from JSON",
-		Long:  "Restore patient data from a previously exported JSON file. Data is imported into the specified patient profile.",
+		Use:     "import <file>",
+		Short:   "Import patient data from JSON",
+		Long:    "Restore patient data from a previously exported JSON file. Data is imported into the specified patient profile.",
 		Example: `  nura import --patient-id 1 backup.json`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -300,9 +312,9 @@ func newImportCmd() *cobra.Command {
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
-		Short: "Print version information",
-		Long:  "Display the current version of the nura CLI.",
+		Use:     "version",
+		Short:   "Print version information",
+		Long:    "Display the current version of the nura CLI.",
 		Example: `  nura version`,
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("nura version 0.1.0")

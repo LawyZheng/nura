@@ -32,7 +32,7 @@ var pages map[string]*template.Template
 
 func init() {
 	pages = make(map[string]*template.Template)
-	pageFiles := []string{"index.html", "dashboard.html", "reports.html", "report_detail.html"}
+	pageFiles := []string{"index.html", "dashboard.html", "reports.html", "report_detail.html", "chat.html"}
 
 	for _, pf := range pageFiles {
 		t := template.Must(

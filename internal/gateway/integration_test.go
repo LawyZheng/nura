@@ -15,6 +15,7 @@ import (
 	"github.com/LawyZheng/nura/internal/pipeline"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
+	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 )
@@ -51,8 +52,12 @@ func TestIntegration_FullFlow(t *testing.T) {
 		},
 	}
 	pe := policy.NewEngine()
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s)
+	srv := NewServer(agent, llm, s, ks)
 
 	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()

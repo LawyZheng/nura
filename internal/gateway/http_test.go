@@ -10,12 +10,20 @@ import (
 	"strings"
 	"testing"
 
+	goruntime "runtime"
+
 	"github.com/LawyZheng/nura/internal/model"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
+	"github.com/LawyZheng/nura/internal/rag"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
 )
+
+func knowledgeDir() string {
+	_, file, _, _ := goruntime.Caller(0)
+	return filepath.Join(filepath.Dir(file), "..", "..", "knowledge")
+}
 
 func newTestServer(t *testing.T) (*Server, int) {
 	t.Helper()
@@ -31,10 +39,15 @@ func newTestServer(t *testing.T) (*Server, int) {
 		t.Fatalf("create patient: %v", err)
 	}
 
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
+
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	return NewServer(agent, llm, s), pid
+	return NewServer(agent, llm, s, ks), pid
 }
 
 func TestHealth(t *testing.T) {
@@ -244,10 +257,15 @@ func newTestServerWithData(t *testing.T) (*Server, *store.Store, int) {
 	})
 	seedTestData(t, s, pid)
 
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
+
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	return NewServer(agent, llm, s), s, pid
+	return NewServer(agent, llm, s, ks), s, pid
 }
 
 func TestAPI_ListReports(t *testing.T) {
@@ -443,10 +461,15 @@ func TestWeb_Index_Empty(t *testing.T) {
 	s, _ := store.New(filepath.Join(dir, "test.db"))
 	defer s.Close()
 
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
+
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s)
+	srv := NewServer(agent, llm, s, ks)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -575,5 +598,98 @@ func TestAPI_UpdatePatient(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Name != "Updated Name" {
 		t.Errorf("name = %q, want 'Updated Name'", resp.Name)
+	}
+}
+
+// --- Chat endpoint tests ---
+
+func TestAPI_Chat(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"patient_id": pid,
+		"message":    "HP呼气试验是什么",
+	})
+	req := httptest.NewRequest("POST", "/api/chat", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["reply"]; !ok {
+		t.Error("missing 'reply' field")
+	}
+}
+
+func TestAPI_Chat_MissingFields(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]string{})
+	req := httptest.NewRequest("POST", "/api/chat", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestAPI_ChatHistory(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertChatMessage(&model.ChatMessage{PatientID: pid, Role: "user", Content: "test question"})
+	s.InsertChatMessage(&model.ChatMessage{PatientID: pid, Role: "assistant", Content: "test answer"})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/chat/history?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var msgs []model.ChatMessage
+	json.Unmarshal(resp["messages"], &msgs)
+
+	if len(msgs) != 2 {
+		t.Errorf("expected 2 messages, got %d", len(msgs))
+	}
+}
+
+func TestAPI_ChatHistory_MissingPatientID(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", "/api/chat/history", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestWeb_ChatPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/chat", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "与知愈对话") {
+		t.Error("expected chat page title")
 	}
 }
