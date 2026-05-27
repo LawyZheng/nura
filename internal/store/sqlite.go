@@ -238,6 +238,46 @@ func (s *Store) InsertMedicationLog(ml *model.MedicationLog) (int, error) {
 	return ml.ID, nil
 }
 
+func (s *Store) GetIndicatorsByCategory(patientID int, category string) ([]*model.MedicalIndicator, error) {
+	var indicators []*model.MedicalIndicator
+	if err := s.db.Where("patient_id = ? AND category = ?", patientID, category).Order("measured_at, indicator_name").Find(&indicators).Error; err != nil {
+		return nil, err
+	}
+	return indicators, nil
+}
+
+func (s *Store) GetAbnormalIndicators(patientID int) ([]*model.MedicalIndicator, error) {
+	var indicators []*model.MedicalIndicator
+	if err := s.db.Where("patient_id = ? AND is_abnormal = ?", patientID, true).Order("measured_at DESC, indicator_name").Find(&indicators).Error; err != nil {
+		return nil, err
+	}
+	return indicators, nil
+}
+
+func (s *Store) ListRecentReports(patientID int, limit int) ([]*model.HealthReport, error) {
+	var reports []*model.HealthReport
+	if err := s.db.Where("patient_id = ?", patientID).Order("report_date DESC").Limit(limit).Find(&reports).Error; err != nil {
+		return nil, err
+	}
+	return reports, nil
+}
+
+// --- Patient Profile (list) ---
+
+func (s *Store) ListPatientProfiles() ([]*model.PatientProfile, error) {
+	var profiles []*model.PatientProfile
+	if err := s.db.Order("id").Find(&profiles).Error; err != nil {
+		return nil, err
+	}
+	return profiles, nil
+}
+
+// --- Memory Summary (supersede) ---
+
+func (s *Store) SupersedeMemorySummary(oldID, newID int) error {
+	return s.db.Model(&model.MemorySummary{}).Where("id = ?", oldID).Update("superseded_by", newID).Error
+}
+
 // --- AI Insight ---
 
 func (s *Store) InsertAIInsight(ai *model.AIInsight) (int, error) {
