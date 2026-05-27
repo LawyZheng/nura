@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/LawyZheng/nura/internal/memory"
 	"github.com/LawyZheng/nura/internal/model"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/store"
@@ -33,12 +34,13 @@ type IngestionResult struct {
 // Pipeline processes raw report text through classification, extraction,
 // normalization, merge, and explanation stages.
 type Pipeline struct {
-	llm   providers.LLMProvider
-	store *store.Store
+	llm     providers.LLMProvider
+	store   *store.Store
+	updater *memory.Updater
 }
 
 func NewPipeline(llm providers.LLMProvider, s *store.Store) *Pipeline {
-	return &Pipeline{llm: llm, store: s}
+	return &Pipeline{llm: llm, store: s, updater: memory.NewUpdater(llm, s)}
 }
 
 // Run executes the full ingestion pipeline on a raw report for the given patient.
@@ -85,6 +87,15 @@ func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate s
 	result.Explanation = explanation
 	result.MissingFields = missingFields
 	result.Stages = append(result.Stages, explainResult)
+
+	// Stage 6: Update memory.
+	memoryResult := StageResult{StageName: "update_memory"}
+	if err := p.updater.AfterIngestion(patientID); err != nil {
+		memoryResult.Error = err.Error()
+	} else {
+		memoryResult.Data = map[string]any{"status": "updated"}
+	}
+	result.Stages = append(result.Stages, memoryResult)
 
 	return result, nil
 }

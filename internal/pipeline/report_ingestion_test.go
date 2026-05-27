@@ -111,8 +111,8 @@ func TestPipeline_GastroscopyReport(t *testing.T) {
 		t.Error("expected non-empty explanation")
 	}
 
-	if len(result.Stages) != 5 {
-		t.Errorf("expected 5 stages, got %d", len(result.Stages))
+	if len(result.Stages) != 6 {
+		t.Errorf("expected 6 stages, got %d", len(result.Stages))
 	}
 
 	// Check stored report is scoped to patient.
@@ -140,6 +140,7 @@ func TestPipeline_StageNames(t *testing.T) {
 		"normalize_indicators",
 		"merge_state",
 		"generate_explanation",
+		"update_memory",
 	}
 	for i, expected := range expectedStages {
 		if i >= len(result.Stages) {
@@ -171,7 +172,7 @@ func TestPipeline_WithSyntheticSample(t *testing.T) {
 		t.Error("expected non-empty report type")
 	}
 
-	if len(result.Stages) != 5 {
-		t.Errorf("expected 5 pipeline stages, got %d", len(result.Stages))
+	if len(result.Stages) != 6 {
+		t.Errorf("expected 6 pipeline stages, got %d", len(result.Stages))
 	}
 }
