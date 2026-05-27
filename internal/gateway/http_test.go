@@ -842,3 +842,116 @@ func TestWeb_SymptomsPage(t *testing.T) {
 		t.Error("expected page title '症状记录'")
 	}
 }
+
+// --- T3: Diet recording tests ---
+
+func TestAPI_CreateMeal(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":    pid,
+		"meal_type":     "lunch",
+		"content":       "synthetic meal: rice and fish",
+		"irritant_tags": []string{},
+	})
+	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body = %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["meal"]; !ok {
+		t.Error("missing 'meal' field")
+	}
+}
+
+func TestAPI_CreateMeal_WithIrritants(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(map[string]any{
+		"patient_id":    pid,
+		"meal_type":     "lunch",
+		"content":       "synthetic spicy hotpot",
+		"irritant_tags": []string{"spicy", "oily"},
+	})
+	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", w.Code)
+	}
+
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	meal := resp["meal"].(map[string]any)
+	if meal["has_irritant"] != true {
+		t.Error("expected has_irritant=true for irritant_tags")
+	}
+}
+
+func TestAPI_CreateMeal_MissingFields(t *testing.T) {
+	srv, _, _ := newTestServerWithData(t)
+
+	body, _ := json.Marshal(map[string]any{"meal_type": "lunch"})
+	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestAPI_ListMeals(t *testing.T) {
+	srv, s, pid := newTestServerWithData(t)
+
+	// SYNTHETIC DATA - not real patient information
+	s.InsertMealLog(&model.MealLog{
+		PatientID: pid, MealType: "lunch", Content: "synthetic rice",
+		RecordedAt: time.Now(),
+	})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/meals?patient_id=%d", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&resp)
+	var meals []model.MealLog
+	json.Unmarshal(resp["meals"], &meals)
+
+	if len(meals) != 1 {
+		t.Errorf("expected 1 meal, got %d", len(meals))
+	}
+}
+
+func TestWeb_MealsPage(t *testing.T) {
+	srv, _, pid := newTestServerWithData(t)
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/meals", pid), nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "饮食记录") {
+		t.Error("expected page title '饮食记录'")
+	}
+}
