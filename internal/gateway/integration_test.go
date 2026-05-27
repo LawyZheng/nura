@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -17,8 +18,11 @@ import (
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/rag"
+	"github.com/LawyZheng/nura/internal/reminder"
 	"github.com/LawyZheng/nura/internal/runtime"
 	"github.com/LawyZheng/nura/internal/store"
+	"github.com/LawyZheng/nura/internal/trend"
+	"time"
 )
 
 // TestIntegration_FullFlow exercises the complete Phase 2a flow:
@@ -328,5 +332,215 @@ func TestIntegration_ChatFlow(t *testing.T) {
 	json.Unmarshal(histResp["messages"], &msgs)
 	if len(msgs) != 0 {
 		t.Errorf("expected 0 messages for other patient, got %d", len(msgs))
+	}
+}
+
+// TestIntegration_Phase3Flow exercises the Phase 3 daily logging flow:
+// create patient → record symptoms → record meals → add medication →
+// log dose → query trends → generate AI insight → create/query reminders →
+// verify emergency detection.
+func TestIntegration_Phase3Flow(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.New(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	defer s.Close()
+
+	llm := &providers.MockProvider{
+		CompleteFunc: func(_ context.Context, req providers.CompletionRequest) (*providers.CompletionResponse, error) {
+			// SYNTHETIC DATA - not real patient information
+			return &providers.CompletionResponse{
+				Content:    "合成分析：近期症状呈好转趋势，建议继续按医嘱用药。",
+				StopReason: "end_turn",
+			}, nil
+		},
+	}
+	pe := policy.NewEngine()
+	ks, err := rag.LoadFromDir(knowledgeDir())
+	if err != nil {
+		t.Fatalf("load knowledge: %v", err)
+	}
+	agent := runtime.NewAgentRuntime(llm, pe, s)
+	srv := NewServer(agent, llm, s, ks)
+
+	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
+		t.Helper()
+		var req *http.Request
+		if body != nil {
+			req = httptest.NewRequest(method, path, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+		} else {
+			req = httptest.NewRequest(method, path, nil)
+		}
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, req)
+		return w
+	}
+
+	// Step 1: Create patient
+	// SYNTHETIC DATA - not real patient information
+	createBody, _ := json.Marshal(map[string]any{
+		"name": "Synthetic Phase3 Patient", "gender": "male",
+	})
+	w := do("POST", "/api/patient", createBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create patient: status = %d", w.Code)
+	}
+	var patient model.PatientProfile
+	json.NewDecoder(w.Body).Decode(&patient)
+	pid := patient.ID
+	pidStr := strconv.Itoa(pid)
+
+	// Step 2: Record symptom (normal)
+	symptomBody, _ := json.Marshal(map[string]any{
+		"patient_id": pid, "pain_score": 5, "pain_location": "upper_abdomen",
+		"stool_color": "normal", "bloating": true,
+	})
+	w = do("POST", "/api/symptoms", symptomBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create symptom: status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var symptomResp map[string]any
+	json.NewDecoder(w.Body).Decode(&symptomResp)
+	if symptomResp["emergency"] == true {
+		t.Error("expected no emergency for normal symptom")
+	}
+
+	// Step 3: Record symptom (emergency — black stool)
+	emergencyBody, _ := json.Marshal(map[string]any{
+		"patient_id": pid, "pain_score": 7, "stool_color": "black",
+	})
+	w = do("POST", "/api/symptoms", emergencyBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create emergency symptom: status = %d", w.Code)
+	}
+	json.NewDecoder(w.Body).Decode(&symptomResp)
+	if symptomResp["emergency"] != true {
+		t.Error("expected emergency=true for black stool")
+	}
+
+	// Step 4: List symptoms
+	w = do("GET", "/api/symptoms?patient_id="+pidStr, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list symptoms: status = %d", w.Code)
+	}
+
+	// Step 5: Record meal with irritants
+	mealBody, _ := json.Marshal(map[string]any{
+		"patient_id": pid, "meal_type": "lunch",
+		"content": "synthetic spicy hotpot", "irritant_tags": []string{"spicy", "oily"},
+	})
+	w = do("POST", "/api/meals", mealBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create meal: status = %d", w.Code)
+	}
+	var mealResp map[string]any
+	json.NewDecoder(w.Body).Decode(&mealResp)
+	meal := mealResp["meal"].(map[string]any)
+	if meal["has_irritant"] != true {
+		t.Error("expected has_irritant=true")
+	}
+
+	// Step 6: Add medication
+	medBody, _ := json.Marshal(map[string]any{
+		"patient_id": pid, "name": "Synthetic Omeprazole",
+		"category": "ppi", "dosage": "20mg", "frequency": "bid",
+		"time_of_day": "早晚餐前",
+		"course_start": "2026-05-20", "course_end": "2026-06-02",
+	})
+	w = do("POST", "/api/medications", medBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create medication: status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var medResp map[string]any
+	json.NewDecoder(w.Body).Decode(&medResp)
+	medData := medResp["medication"].(map[string]any)
+	medID := int(medData["id"].(float64))
+
+	// Step 7: Log a dose
+	logBody, _ := json.Marshal(map[string]any{"skipped": false, "note": "on time"})
+	w = do("POST", fmt.Sprintf("/api/medications/%d/log", medID), logBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("log dose: status = %d", w.Code)
+	}
+
+	// Step 8: Query trends
+	w = do("GET", "/api/trends?patient_id="+pidStr+"&days=7", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get trends: status = %d", w.Code)
+	}
+	var trendsResp map[string]json.RawMessage
+	json.NewDecoder(w.Body).Decode(&trendsResp)
+	for _, field := range []string{"symptoms", "meals", "medications", "period"} {
+		if _, ok := trendsResp[field]; !ok {
+			t.Errorf("trends missing field %q", field)
+		}
+	}
+
+	// Step 9: Generate AI insight
+	insightBody, _ := json.Marshal(map[string]any{
+		"patient_id": pid, "days": 7,
+	})
+	w = do("POST", "/api/trends/insight", insightBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("generate insight: status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var insightResp trend.InsightResult
+	json.NewDecoder(w.Body).Decode(&insightResp)
+	if insightResp.Insight == nil {
+		t.Fatal("expected non-nil insight")
+	}
+	if insightResp.Disclaimer == "" {
+		t.Error("expected disclaimer on insight")
+	}
+
+	// Step 10: Generate reminders
+	scheduler := reminder.NewScheduler(s)
+	today := time.Date(2026, 5, 25, 10, 0, 0, 0, time.UTC)
+	count, err := scheduler.GenerateDailyReminders(pid, today)
+	if err != nil {
+		t.Fatalf("generate reminders: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 reminders for bid, got %d", count)
+	}
+
+	// Step 11: Query pending reminders
+	w = do("GET", fmt.Sprintf("/api/reminders/pending?patient_id=%d", pid), nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pending reminders: status = %d", w.Code)
+	}
+
+	// Step 12: Verify all web pages render
+	pages := []struct {
+		path  string
+		check string
+	}{
+		{"/patient/" + pidStr, "健康档案"},
+		{"/patient/" + pidStr + "/symptoms", "症状记录"},
+		{"/patient/" + pidStr + "/meals", "饮食记录"},
+		{"/patient/" + pidStr + "/medications", "用药管理"},
+		{"/patient/" + pidStr + "/trends", "趋势分析"},
+		{"/patient/" + pidStr + "/chat", "与知愈对话"},
+	}
+	for _, p := range pages {
+		w = do("GET", p.path, nil)
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", p.path, w.Code)
+			continue
+		}
+		if !strings.Contains(w.Body.String(), p.check) {
+			t.Errorf("%s: missing %q", p.path, p.check)
+		}
+	}
+
+	// Step 13: Dashboard nav-links include all Phase 3 pages
+	w = do("GET", "/patient/"+pidStr, nil)
+	body := w.Body.String()
+	for _, link := range []string{"symptoms", "meals", "medications", "trends", "chat"} {
+		if !strings.Contains(body, "/patient/"+pidStr+"/"+link) {
+			t.Errorf("dashboard missing nav link to %s", link)
+		}
 	}
 }
