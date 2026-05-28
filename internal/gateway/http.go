@@ -27,26 +27,28 @@ func init() {
 
 // Server is the HTTP gateway that exposes the agent API.
 type Server struct {
-	agent    *runtime.AgentRuntime
-	pipeline *pipeline.Pipeline
-	traces   *runtime.TraceStore
-	store    *store.Store
-	chatSvc  *chat.Service
-	trendSvc *trend.Service
-	engine   *gin.Engine
-	srv      *http.Server
+	agent         *runtime.AgentRuntime
+	pipeline      *pipeline.Pipeline
+	traces        *runtime.TraceStore
+	store         *store.Store
+	chatSvc       *chat.Service
+	trendSvc      *trend.Service
+	engine        *gin.Engine
+	srv           *http.Server
+	passcodeLimit *sharePasscodeLimiter
 }
 
 // NewServer creates a new HTTP gateway.
 func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.Store, ks *rag.KnowledgeStore) *Server {
 	gw := &Server{
-		agent:    agent,
-		pipeline: pipeline.NewPipeline(llm, s),
-		traces:   agent.Traces(),
-		store:    s,
-		chatSvc:  chat.NewService(llm, policy.NewEngine(), ks, s),
-		trendSvc: trend.NewService(llm, s),
-		engine:   gin.New(),
+		agent:         agent,
+		pipeline:      pipeline.NewPipeline(llm, s),
+		traces:        agent.Traces(),
+		store:         s,
+		chatSvc:       chat.NewService(llm, policy.NewEngine(), ks, s),
+		trendSvc:      trend.NewService(llm, s),
+		engine:        gin.New(),
+		passcodeLimit: newSharePasscodeLimiter(nil),
 	}
 	gw.engine.Use(gin.Recovery())
 	gw.engine.Use(corsMiddleware())
