@@ -10,23 +10,14 @@
       <label for="raw_text">报告原文（粘贴文本）</label>
       <textarea id="raw_text" name="raw_text" placeholder="将检查报告文本粘贴到此处..." required></textarea>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label for="report_date">报告日期</label>
-        <input type="date" id="report_date" name="report_date" required>
-      </div>
-      <div class="form-group">
-        <label for="source_type">来源</label>
-        <select id="source_type" name="source_type">
-          <option value="text">文本粘贴</option>
-          <option value="photo">拍照识别</option>
-          <option value="pdf">PDF</option>
-        </select>
-      </div>
+    <div class="form-group">
+      <label for="report_date">报告日期</label>
+      <input type="date" id="report_date" name="report_date" required>
     </div>
     <button type="submit" class="btn" id="submit-btn">提交解析</button>
     <span id="upload-status" style="margin-left: 12px; color: var(--muted);"></span>
   </form>
+  <p style="margin-top: 8px; font-size: 0.85em; color: var(--muted);">提交的报告原文将作为原始来源证据存档保留，并生成校验哈希以确保完整性。</p>
 </div>
 
 {{if .Reports}}
@@ -67,7 +58,6 @@ document.getElementById('upload-form').addEventListener('submit', async function
   var data = {
     raw_text: document.getElementById('raw_text').value,
     report_date: document.getElementById('report_date').value,
-    source_type: document.getElementById('source_type').value,
     patient_id: {{.PatientID}}
   };
 

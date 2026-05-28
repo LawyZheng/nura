@@ -23,14 +23,16 @@ type ReportTool struct {
 	pipeline *pipeline.Pipeline
 }
 
-func NewReportTool(llm providers.LLMProvider, s *store.Store) *ReportTool {
+func NewReportTool(llm providers.LLMProvider, s *store.Store, archiveDir string) *ReportTool {
 	return &ReportTool{
-		pipeline: pipeline.NewPipeline(llm, s),
+		pipeline: pipeline.NewPipeline(llm, s, archiveDir),
 	}
 }
 
-func (rt *ReportTool) Name() string        { return "report_ingest" }
-func (rt *ReportTool) Description() string { return "Ingest a medical report: classify, extract, normalize, merge, and explain" }
+func (rt *ReportTool) Name() string { return "report_ingest" }
+func (rt *ReportTool) Description() string {
+	return "Ingest a medical report: classify, extract, normalize, merge, and explain"
+}
 
 func (rt *ReportTool) Schema() json.RawMessage {
 	return json.RawMessage(`{
@@ -38,8 +40,7 @@ func (rt *ReportTool) Schema() json.RawMessage {
 		"properties": {
 			"patient_id":  {"type": "integer", "description": "Patient profile ID"},
 			"raw_text":    {"type": "string", "description": "Raw text content of the medical report"},
-			"report_date": {"type": "string", "description": "Date of the report (YYYY-MM-DD)"},
-			"source_type": {"type": "string", "description": "Source type: photo or pdf"}
+			"report_date": {"type": "string", "description": "Date of the report (YYYY-MM-DD)"}
 		},
 		"required": ["patient_id", "raw_text", "report_date"]
 	}`)
@@ -51,7 +52,7 @@ func (rt *ReportTool) Execute(ctx context.Context, input json.RawMessage) (ToolR
 		return ToolResult{}, fmt.Errorf("unmarshal input: %w", err)
 	}
 
-	result, err := rt.pipeline.Run(ctx, in.PatientID, in.RawText, in.ReportDate)
+	result, err := rt.pipeline.Run(ctx, in.PatientID, in.RawText, in.ReportDate, in.SourceType)
 	if err != nil {
 		return ToolResult{Error: err.Error()}, err
 	}

@@ -27,6 +27,8 @@ func newMockPipeline(t *testing.T, cfg mockConfig) (*Pipeline, *store.Store) {
 	}
 	t.Cleanup(func() { s.Close() })
 
+	archiveDir := filepath.Join(dir, "evidence")
+
 	llm := &providers.MockProvider{
 		CompleteFunc: func(ctx context.Context, req providers.CompletionRequest) (*providers.CompletionResponse, error) {
 			if strings.Contains(req.SystemPrompt, "classifier") {
@@ -47,7 +49,7 @@ func newMockPipeline(t *testing.T, cfg mockConfig) (*Pipeline, *store.Store) {
 			}, nil
 		},
 	}
-	return NewPipeline(llm, s), s
+	return NewPipeline(llm, s, archiveDir), s
 }
 
 func mustJSON(t *testing.T, v any) string {
@@ -97,7 +99,7 @@ func TestPipeline_GastroscopyReport(t *testing.T) {
 分期：A2 期（活动期）。
 快速尿素酶试验：阳性（+）`
 
-	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01")
+	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +130,7 @@ func TestPipeline_StageNames(t *testing.T) {
 	p, s := newTestPipeline(t)
 	pid := createTestPatient(t, s)
 
-	result, err := p.Run(context.Background(), pid, "test report", "2024-01-01")
+	result, err := p.Run(context.Background(), pid, "test report", "2024-01-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +172,7 @@ func TestPipeline_ReportExplanationUsesOutputGuard(t *testing.T) {
 分期：A2 期（活动期）。
 快速尿素酶试验：阳性（+）`
 
-	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01")
+	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +218,7 @@ func TestPipeline_ReportExplanationSanitizesUnsafeContent(t *testing.T) {
 	rawText := `胃镜检查报告
 十二指肠球部：前壁可见一处溃疡。`
 
-	result, err := p.Run(context.Background(), pid, rawText, "2024-01-01")
+	result, err := p.Run(context.Background(), pid, rawText, "2024-01-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +252,7 @@ func TestPipeline_ReportExplanationLowConfidenceOnIndicatorGaps(t *testing.T) {
 				explanation:    "报告未发现可提取的结构化指标，建议咨询医生进一步评估。",
 			})
 			pid := createTestPatient(t, s)
-			result, err := p.Run(context.Background(), pid, "胃镜检查报告（内容不清）", "2024-01-01")
+			result, err := p.Run(context.Background(), pid, "胃镜检查报告（内容不清）", "2024-01-01", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -281,7 +283,7 @@ func TestPipeline_PartialIndicatorGapDetected(t *testing.T) {
 十二指肠球部：前壁可见一处溃疡。
 快速尿素酶试验：阳性（+）`
 
-	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01")
+	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +321,7 @@ func TestPipeline_WithSyntheticSample(t *testing.T) {
 
 	p, s := newTestPipeline(t)
 	pid := createTestPatient(t, s)
-	result, err := p.Run(context.Background(), pid, string(data), "2024-03-01")
+	result, err := p.Run(context.Background(), pid, string(data), "2024-03-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,5 +331,93 @@ func TestPipeline_WithSyntheticSample(t *testing.T) {
 	}
 	if len(result.Stages) != 6 {
 		t.Errorf("expected 6 pipeline stages, got %d", len(result.Stages))
+	}
+}
+
+// --- Source evidence retention tests ---
+
+func TestPipeline_SourceEvidenceRetention(t *testing.T) {
+	p, s := newTestPipeline(t)
+	pid := createTestPatient(t, s)
+
+	// SYNTHETIC DATA - not real patient information
+	rawText := "胃镜检查报告\n十二指肠球部：前壁可见一处溃疡，大小约 0.8×0.6cm。"
+	result, err := p.Run(context.Background(), pid, rawText, "2024-03-01", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SourcePath == "" || result.SourceHash == "" {
+		t.Fatal("expected non-empty SourcePath and SourceHash")
+	}
+	if result.SourceType != "text" {
+		t.Errorf("SourceType = %q, want 'text' (default)", result.SourceType)
+	}
+	data, err := os.ReadFile(result.SourcePath)
+	if err != nil {
+		t.Fatalf("read archived evidence: %v", err)
+	}
+	if string(data) != rawText {
+		t.Error("archived content does not match original raw_text")
+	}
+	reports, _ := s.ListHealthReports(pid)
+	if len(reports) != 1 {
+		t.Fatalf("expected 1 report, got %d", len(reports))
+	}
+	r := reports[0]
+	if r.SourcePath != result.SourcePath || r.SourceHash != result.SourceHash || r.SourceType != "text" {
+		t.Errorf("stored report evidence mismatch: path=%q hash=%q type=%q", r.SourcePath, r.SourceHash, r.SourceType)
+	}
+}
+
+func TestPipeline_SourceEvidenceRetention_ArchiveFailureBlocksAll(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.New(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	badPath := filepath.Join(dir, "not-a-dir")
+	os.WriteFile(badPath, []byte("block"), 0o644)
+
+	llmCalls := 0
+	llm := &providers.MockProvider{
+		CompleteFunc: func(_ context.Context, req providers.CompletionRequest) (*providers.CompletionResponse, error) {
+			llmCalls++
+			return &providers.CompletionResponse{Content: "gastroscopy"}, nil
+		},
+	}
+	p := NewPipeline(llm, s, badPath)
+	pid, _ := s.CreatePatientProfile(&model.PatientProfile{Name: "Test"})
+
+	_, err = p.Run(context.Background(), pid, "SYNTHETIC DATA: test", "2024-01-01", "")
+	if err == nil {
+		t.Fatal("expected error when evidence archive fails")
+	}
+	if llmCalls != 0 {
+		t.Fatalf("expected archive failure before any LLM calls, got %d calls", llmCalls)
+	}
+	reports, _ := s.ListHealthReports(pid)
+	if len(reports) != 0 {
+		t.Error("expected no reports stored")
+	}
+	indicators, _ := s.GetAbnormalIndicators(pid)
+	if len(indicators) != 0 {
+		t.Error("expected no indicators stored")
+	}
+}
+
+func TestPipeline_SourceType_RejectsNonText(t *testing.T) {
+	p, s := newTestPipeline(t)
+	pid := createTestPatient(t, s)
+
+	for _, bad := range []string{"photo", "pdf", "image"} {
+		if _, err := p.Run(context.Background(), pid, "SYNTHETIC: test", "2024-06-01", bad); err == nil {
+			t.Errorf("source_type=%q: expected error", bad)
+		}
+	}
+	reports, _ := s.ListHealthReports(pid)
+	if len(reports) != 0 {
+		t.Error("expected no reports for rejected source_type")
 	}
 }
