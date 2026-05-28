@@ -130,7 +130,7 @@ function submitSymptom(e) {
     note: form.querySelector('[name="note"]').value
   };
 
-  fetch('/api/symptoms', {
+  nuraFetch('/api/symptoms', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(data)

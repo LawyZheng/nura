@@ -73,6 +73,10 @@ func TestIntegration_FullFlow(t *testing.T) {
 		} else {
 			req = httptest.NewRequest(method, path, nil)
 		}
+		addOwnerSession(req, srv)
+		if method != http.MethodGet {
+			addCSRFHeader(req, srv)
+		}
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 		return w
@@ -220,6 +224,10 @@ func TestIntegration_ChatFlow(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 		} else {
 			req = httptest.NewRequest(method, path, nil)
+		}
+		addOwnerSession(req, srv)
+		if method != http.MethodGet {
+			addCSRFHeader(req, srv)
 		}
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
@@ -372,6 +380,10 @@ func TestIntegration_Phase3Flow(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 		} else {
 			req = httptest.NewRequest(method, path, nil)
+		}
+		addOwnerSession(req, srv)
+		if method != http.MethodGet {
+			addCSRFHeader(req, srv)
 		}
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)

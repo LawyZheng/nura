@@ -113,7 +113,7 @@ document.querySelectorAll('.progress-bar').forEach(function(bar) {
 });
 
 function logDose(medID, skipped) {
-  fetch('/api/medications/' + medID + '/log?patient_id={{.PatientID}}', {
+  nuraFetch('/api/medications/' + medID + '/log?patient_id={{.PatientID}}', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({skipped: skipped, note: ''})
@@ -140,7 +140,7 @@ function submitMedication(e) {
     course_end: form.querySelector('[name="course_end"]').value
   };
 
-  fetch('/api/medications', {
+  nuraFetch('/api/medications', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(data)

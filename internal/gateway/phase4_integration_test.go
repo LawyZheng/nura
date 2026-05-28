@@ -76,6 +76,7 @@ func TestPhase4Integration(t *testing.T) {
 	// --- Step 1: Generate PDF ---
 	t.Run("PDF_export", func(t *testing.T) {
 		req := httptest.NewRequest("GET", fmt.Sprintf("/api/patient/%d/summary/pdf", pid), nil)
+		addOwnerSession(req, srv)
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 
@@ -97,6 +98,8 @@ func TestPhase4Integration(t *testing.T) {
 	t.Run("create_share_link", func(t *testing.T) {
 		req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader(`{"passcode":"4321"}`))
 		req.Header.Set("Content-Type", "application/json")
+		addOwnerSession(req, srv)
+		addCSRFHeader(req, srv)
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 
@@ -173,6 +176,8 @@ func TestPhase4Integration(t *testing.T) {
 	t.Run("share_no_passcode_flow", func(t *testing.T) {
 		req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader("{}"))
 		req.Header.Set("Content-Type", "application/json")
+		addOwnerSession(req, srv)
+		addCSRFHeader(req, srv)
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 
@@ -195,6 +200,7 @@ func TestPhase4Integration(t *testing.T) {
 	// --- Step 8: List share links ---
 	t.Run("list_share_links", func(t *testing.T) {
 		req := httptest.NewRequest("GET", fmt.Sprintf("/api/patient/%d/shares", pid), nil)
+		addOwnerSession(req, srv)
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 
@@ -211,6 +217,7 @@ func TestPhase4Integration(t *testing.T) {
 	// --- Step 9: Dashboard has Phase 4 nav elements ---
 	t.Run("dashboard_phase4_elements", func(t *testing.T) {
 		req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d", pid), nil)
+		addOwnerSession(req, srv)
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 

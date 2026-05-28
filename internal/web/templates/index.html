@@ -67,7 +67,7 @@ document.getElementById('add-patient-form').addEventListener('submit', async fun
     birth_date: document.getElementById('birth_date').value
   };
   try {
-    const resp = await fetch('/api/patient', {
+    const resp = await nuraFetch('/api/patient', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(data)

@@ -36,6 +36,7 @@ type Server struct {
 	engine        *gin.Engine
 	srv           *http.Server
 	passcodeLimit *sharePasscodeLimiter
+	ownerAuth     *ownerAuth
 }
 
 // NewServer creates a new HTTP gateway.
@@ -49,16 +50,20 @@ func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.
 		trendSvc:      trend.NewService(llm, s),
 		engine:        gin.New(),
 		passcodeLimit: newSharePasscodeLimiter(nil),
+		ownerAuth:     newOwnerAuth(),
 	}
 	gw.engine.Use(gin.Recovery())
 	gw.engine.Use(corsMiddleware())
 	gw.engine.Use(requestLogger())
+	gw.engine.Use(gw.ownerAuth.requireSession())
+	gw.engine.Use(gw.ownerAuth.requireCSRF())
 	gw.routes()
 	return gw
 }
 
 func (gw *Server) routes() {
 	gw.engine.GET("/health", gw.handleHealth)
+	gw.engine.GET("/local/login", gw.ownerAuth.handleLogin)
 	gw.engine.POST("/agent/run", gw.handleAgentRun)
 	gw.engine.POST("/agent/report/ingest", gw.handleReportIngest)
 	gw.engine.GET("/agent/debug/trace/:trace_id", gw.handleTrace)
@@ -112,6 +117,7 @@ func (gw *Server) ListenAndServe(addr string) error {
 		Handler: gw.engine,
 	}
 	log.Printf("nura gateway listening on %s", addr)
+	log.Printf("open http://%s/local/login?token=%s", addr, gw.ownerAuth.bootstrapToken)
 	return gw.srv.ListenAndServe()
 }
 
@@ -139,7 +145,7 @@ func corsMiddleware() gin.HandlerFunc {
 		if isAllowedOrigin(origin) {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-CSRF-Token")
 		}
 
 		if c.Request.Method == http.MethodOptions {

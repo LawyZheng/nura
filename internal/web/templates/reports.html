@@ -72,7 +72,7 @@ document.getElementById('upload-form').addEventListener('submit', async function
   };
 
   try {
-    var resp = await fetch('/agent/report/ingest', {
+    var resp = await nuraFetch('/agent/report/ingest', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(data)

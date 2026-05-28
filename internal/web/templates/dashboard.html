@@ -195,7 +195,7 @@
 function createShareLink(e, pid) {
   e.preventDefault();
   var pc = document.getElementById('share-passcode').value;
-  fetch('/api/patient/' + pid + '/share', {
+  nuraFetch('/api/patient/' + pid + '/share', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({passcode: pc})
