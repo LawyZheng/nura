@@ -8,6 +8,7 @@ import (
 
 	"github.com/LawyZheng/nura/internal/memory"
 	"github.com/LawyZheng/nura/internal/model"
+	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/store"
 )
@@ -21,14 +22,18 @@ type StageResult struct {
 
 // IngestionResult is the final output of the report ingestion pipeline.
 type IngestionResult struct {
-	ReportType           model.ReportType          `json:"report_type"`
-	ExtractedFacts       map[string]any            `json:"extracted_facts"`
-	NormalizedIndicators []*model.MedicalIndicator `json:"normalized_indicators"`
-	MergeActions         []string                  `json:"merge_actions,omitempty"`
-	PatientStateUpdates  []string                  `json:"patient_state_updates,omitempty"`
-	MissingFields        []string                  `json:"missing_or_uncertain_fields,omitempty"`
-	Explanation          string                    `json:"user_facing_explanation"`
-	Stages               []StageResult             `json:"stages"`
+	ReportType              model.ReportType          `json:"report_type"`
+	ExtractedFacts          map[string]any            `json:"extracted_facts"`
+	NormalizedIndicators    []*model.MedicalIndicator `json:"normalized_indicators"`
+	MergeActions            []string                  `json:"merge_actions,omitempty"`
+	PatientStateUpdates     []string                  `json:"patient_state_updates,omitempty"`
+	MissingFields           []string                  `json:"missing_or_uncertain_fields,omitempty"`
+	Explanation             string                    `json:"user_facing_explanation"`
+	ExplanationDisclaimer   string                    `json:"explanation_disclaimer,omitempty"`
+	ExplanationConfidence   string                    `json:"explanation_confidence,omitempty"`
+	ExplanationSources      []string                  `json:"explanation_sources,omitempty"`
+	ExplanationSafetyLabels policy.SafetyLabels       `json:"explanation_safety_labels"`
+	Stages                  []StageResult             `json:"stages"`
 }
 
 // Pipeline processes raw report text through classification, extraction,
@@ -79,12 +84,16 @@ func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate s
 	result.MergeActions = mergeActions
 	result.Stages = append(result.Stages, mergeResult)
 
-	// Stage 5: Generate user-facing explanation.
-	explanation, missingFields, explainResult, err := p.generateExplanation(ctx, rawText, reportType, facts, indicators)
+	// Stage 5: Generate user-facing explanation (guarded through OutputGuard).
+	explainOut, missingFields, explainResult, err := p.generateExplanation(ctx, rawText, reportType, reportDate, facts, indicators)
 	if err != nil {
 		return nil, fmt.Errorf("explain: %w", err)
 	}
-	result.Explanation = explanation
+	result.Explanation = explainOut.Content
+	result.ExplanationDisclaimer = explainOut.Disclaimer
+	result.ExplanationConfidence = explainOut.Confidence
+	result.ExplanationSources = explainOut.Sources
+	result.ExplanationSafetyLabels = explainOut.Labels
 	result.MissingFields = missingFields
 	result.Stages = append(result.Stages, explainResult)
 
@@ -243,12 +252,11 @@ func (p *Pipeline) mergeState(ctx context.Context, patientID int, indicators []*
 	return actions, stage, nil
 }
 
-func (p *Pipeline) generateExplanation(ctx context.Context, rawText string, reportType model.ReportType, facts map[string]any, indicators []*model.MedicalIndicator) (string, []string, StageResult, error) {
+func (p *Pipeline) generateExplanation(ctx context.Context, rawText string, reportType model.ReportType, reportDate string, facts map[string]any, indicators []*model.MedicalIndicator) (policy.GuardedOutput, []string, StageResult, error) {
 	stage := StageResult{StageName: "generate_explanation"}
-
-	// Build a prompt summarizing findings.
-	var abnormal []string
 	var missing []string
+
+	var abnormal []string
 	for _, ind := range indicators {
 		if ind.IsAbnormal {
 			abnormal = append(abnormal, fmt.Sprintf("%s(%s): %s %s", ind.IndicatorNameCN, ind.IndicatorName, ind.Value, ind.Unit))
@@ -276,20 +284,79 @@ Report type: %s`, string(reportType), strings.Join(abnormal, "; "), string(repor
 
 	if err != nil {
 		stage.Error = err.Error()
-		return "", missing, stage, err
+		return policy.GuardedOutput{}, missing, stage, err
 	}
 
-	// Identify missing or uncertain fields.
-	if _, ok := facts["indicators"]; !ok {
-		missing = append(missing, "structured indicators not extracted")
-	}
-	if len(indicators) == 0 {
-		missing = append(missing, "no normalized indicators produced")
+	missing = append(missing, detectIndicatorGaps(facts, indicators)...)
+
+	sources := buildExplanationSources(reportType, reportDate, abnormal)
+
+	confidence := "medium"
+	if len(missing) > 0 {
+		confidence = "low"
 	}
 
-	_ = rawText // used indirectly via facts
-	stage.Data = map[string]any{"explanation_length": len(resp.Content), "missing_fields": missing}
-	return resp.Content, missing, stage, nil
+	guard := policy.NewOutputGuard()
+	guarded, err := guard.GuardOutput(ctx, policy.AgentOutput{
+		Content:    resp.Content,
+		Sources:    sources,
+		Confidence: confidence,
+		RiskLevel:  policy.RiskMedium,
+	})
+	if err != nil {
+		stage.Error = err.Error()
+		return policy.GuardedOutput{}, missing, stage, fmt.Errorf("guard explanation: %w", err)
+	}
+
+	_ = rawText
+	stage.Data = map[string]any{
+		"explanation_length": len(guarded.Content),
+		"missing_fields":     missing,
+		"confidence":         guarded.Confidence,
+		"sources_count":      len(sources),
+		"sources":            sources,
+		"has_disclaimer":     guarded.Labels.HasDisclaimer,
+	}
+	return guarded, missing, stage, nil
+}
+
+func buildExplanationSources(reportType model.ReportType, reportDate string, abnormal []string) []string {
+	var sources []string
+	sources = append(sources, fmt.Sprintf("报告类型: %s", string(reportType)))
+	if len(abnormal) > 0 {
+		sources = append(sources, fmt.Sprintf("异常指标: %s", strings.Join(abnormal, ", ")))
+	}
+	if reportDate != "" {
+		sources = append(sources, fmt.Sprintf("报告日期: %s", reportDate))
+	}
+	return sources
+}
+
+func detectIndicatorGaps(facts map[string]any, normalized []*model.MedicalIndicator) []string {
+	var gaps []string
+
+	raw, ok := facts["indicators"]
+	if !ok {
+		gaps = append(gaps, "structured indicators not extracted")
+		return gaps
+	}
+
+	list, ok := raw.([]any)
+	if !ok {
+		gaps = append(gaps, "indicators field is not an array")
+		return gaps
+	}
+
+	if len(normalized) == 0 {
+		gaps = append(gaps, "no normalized indicators produced")
+		return gaps
+	}
+
+	skipped := len(list) - len(normalized)
+	if skipped > 0 {
+		gaps = append(gaps, fmt.Sprintf("%d incomplete indicator(s) skipped during normalization", skipped))
+	}
+	return gaps
 }
 
 // --- helpers ---
