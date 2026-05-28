@@ -191,14 +191,33 @@ func (gw *Server) handleShareVerify(c *gin.Context) {
 		return
 	}
 
+	if gw.passcodeLimit.isLocked(token) {
+		c.Status(http.StatusTooManyRequests)
+		web.Render(c.Writer, "share_auth.html", map[string]any{
+			"Token": token,
+			"Error": "尝试次数过多，请稍后再试",
+		})
+		return
+	}
+
 	passcode := c.PostForm("passcode")
 	if !verifyPasscode(link.Passcode, passcode) {
+		if gw.passcodeLimit.recordFailure(token) {
+			c.Status(http.StatusTooManyRequests)
+			web.Render(c.Writer, "share_auth.html", map[string]any{
+				"Token": token,
+				"Error": "尝试次数过多，请稍后再试",
+			})
+			return
+		}
 		web.Render(c.Writer, "share_auth.html", map[string]any{
 			"Token": token,
 			"Error": "密码错误，请重试",
 		})
 		return
 	}
+
+	gw.passcodeLimit.resetOnSuccess(token)
 
 	if !isHashedPasscode(link.Passcode) {
 		if hashed, err := hashPasscode(passcode); err == nil {
