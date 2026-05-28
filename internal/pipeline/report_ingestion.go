@@ -28,6 +28,9 @@ type IngestionResult struct {
 	MergeActions            []string                  `json:"merge_actions,omitempty"`
 	PatientStateUpdates     []string                  `json:"patient_state_updates,omitempty"`
 	MissingFields           []string                  `json:"missing_or_uncertain_fields,omitempty"`
+	SourceType              string                    `json:"source_type,omitempty"`
+	SourcePath              string                    `json:"source_path,omitempty"`
+	SourceHash              string                    `json:"source_hash,omitempty"`
 	Explanation             string                    `json:"user_facing_explanation"`
 	ExplanationDisclaimer   string                    `json:"explanation_disclaimer,omitempty"`
 	ExplanationConfidence   string                    `json:"explanation_confidence,omitempty"`
@@ -39,18 +42,33 @@ type IngestionResult struct {
 // Pipeline processes raw report text through classification, extraction,
 // normalization, merge, and explanation stages.
 type Pipeline struct {
-	llm     providers.LLMProvider
-	store   *store.Store
-	updater *memory.Updater
+	llm        providers.LLMProvider
+	store      *store.Store
+	updater    *memory.Updater
+	archiveDir string
 }
 
-func NewPipeline(llm providers.LLMProvider, s *store.Store) *Pipeline {
-	return &Pipeline{llm: llm, store: s, updater: memory.NewUpdater(llm, s)}
+func NewPipeline(llm providers.LLMProvider, s *store.Store, archiveDir string) *Pipeline {
+	return &Pipeline{llm: llm, store: s, updater: memory.NewUpdater(llm, s), archiveDir: archiveDir}
 }
 
 // Run executes the full ingestion pipeline on a raw report for the given patient.
-func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate string) (*IngestionResult, error) {
-	result := &IngestionResult{}
+func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate, sourceType string) (*IngestionResult, error) {
+	if sourceType == "" {
+		sourceType = "text"
+	}
+	if sourceType != "text" {
+		return nil, fmt.Errorf("unsupported source_type %q: only \"text\" is supported in current MVP", sourceType)
+	}
+	result := &IngestionResult{SourceType: sourceType}
+
+	// Archive source evidence before any parsing/LLM-derived processing.
+	sourcePath, sourceHash, err := archiveEvidence(p.archiveDir, patientID, reportDate, rawText)
+	if err != nil {
+		return nil, fmt.Errorf("archive evidence: %w", err)
+	}
+	result.SourcePath = sourcePath
+	result.SourceHash = sourceHash
 
 	// Stage 1: Classify report type.
 	reportType, classifyResult, err := p.classifyReport(ctx, rawText)
@@ -77,7 +95,7 @@ func (p *Pipeline) Run(ctx context.Context, patientID int, rawText, reportDate s
 	result.Stages = append(result.Stages, normalizeResult)
 
 	// Stage 4: Merge with existing state.
-	mergeActions, mergeResult, err := p.mergeState(ctx, patientID, indicators, reportType, rawText, reportDate)
+	mergeActions, mergeResult, err := p.mergeState(ctx, patientID, indicators, reportType, rawText, reportDate, sourceType, sourcePath, sourceHash)
 	if err != nil {
 		return nil, fmt.Errorf("merge: %w", err)
 	}
@@ -214,16 +232,19 @@ func (p *Pipeline) normalizeIndicators(facts map[string]any, reportType model.Re
 	return indicators, stage, nil
 }
 
-func (p *Pipeline) mergeState(ctx context.Context, patientID int, indicators []*model.MedicalIndicator, reportType model.ReportType, rawText, reportDate string) ([]string, StageResult, error) {
+func (p *Pipeline) mergeState(ctx context.Context, patientID int, indicators []*model.MedicalIndicator, reportType model.ReportType, rawText, reportDate, sourceType, sourcePath, sourceHash string) ([]string, StageResult, error) {
 	stage := StageResult{StageName: "merge_state"}
 	var actions []string
 
-	// Store the report.
+	// Store the report with source evidence metadata.
 	reportID, err := p.store.InsertHealthReport(&model.HealthReport{
 		PatientID:  patientID,
 		ReportType: reportType,
 		ReportDate: reportDate,
 		RawText:    rawText,
+		SourceType: sourceType,
+		SourcePath: sourcePath,
+		SourceHash: sourceHash,
 	})
 	if err != nil {
 		stage.Error = err.Error()

@@ -125,7 +125,7 @@ func newServeCmd() *cobra.Command {
 			}
 
 			agent := runtime.NewAgentRuntime(llm, pe, s)
-			srv := gateway.NewServer(agent, llm, s, ks)
+			srv := gateway.NewServerWithArchiveDir(agent, llm, s, ks, filepath.Join(dataDir, "evidence"))
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -182,8 +182,9 @@ func newIngestCmd() *cobra.Command {
 
 			logger.Info("ingesting report", zap.String("file", filePath), zap.Int("patient_id", patientID))
 
-			p := pipeline.NewPipeline(llm, s)
-			result, err := p.Run(context.Background(), patientID, string(data), "2024-01-01")
+			archiveDir := filepath.Join(dataDir, "evidence")
+			p := pipeline.NewPipeline(llm, s, archiveDir)
+			result, err := p.Run(context.Background(), patientID, string(data), "2024-01-01", "")
 			if err != nil {
 				return fmt.Errorf("ingest: %w", err)
 			}

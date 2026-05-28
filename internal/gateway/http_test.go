@@ -14,6 +14,7 @@ import (
 	goruntime "runtime"
 
 	"github.com/LawyZheng/nura/internal/model"
+	"github.com/LawyZheng/nura/internal/pipeline"
 	"github.com/LawyZheng/nura/internal/policy"
 	"github.com/LawyZheng/nura/internal/providers"
 	"github.com/LawyZheng/nura/internal/rag"
@@ -45,10 +46,11 @@ func newTestServer(t *testing.T) (*Server, int) {
 		t.Fatalf("load knowledge: %v", err)
 	}
 
+	archiveDir := filepath.Join(dir, "evidence")
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	return NewServer(agent, llm, s, ks), pid
+	return NewServerWithArchiveDir(agent, llm, s, ks, archiveDir), pid
 }
 
 func TestHealth(t *testing.T) {
@@ -146,6 +148,65 @@ func TestReportIngest(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", w.Code)
+	}
+}
+
+func TestReportIngest_SourceEvidenceRetained(t *testing.T) {
+	srv, pid := newTestServer(t)
+
+	// SYNTHETIC DATA - not real patient information
+	body, _ := json.Marshal(reportIngestRequest{
+		RawText:    "SYNTHETIC: 胃镜检查报告 - 十二指肠球部溃疡",
+		ReportDate: "2024-03-01",
+		PatientID:  pid,
+	})
+	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+
+	var result pipeline.IngestionResult
+	json.NewDecoder(w.Body).Decode(&result)
+	if result.SourcePath == "" || result.SourceHash == "" {
+		t.Error("expected non-empty source_path and source_hash in response")
+	}
+	if result.SourceType != "text" {
+		t.Errorf("response SourceType = %q, want 'text'", result.SourceType)
+	}
+	report, _ := srv.store.GetHealthReport(1)
+	if report.SourcePath != result.SourcePath || report.SourceHash != result.SourceHash {
+		t.Error("stored evidence metadata does not match response")
+	}
+	if report.SourceType != "text" {
+		t.Errorf("stored SourceType = %q, want 'text'", report.SourceType)
+	}
+}
+
+func TestReportIngest_RejectsNonTextSourceType(t *testing.T) {
+	srv, pid := newTestServer(t)
+
+	body, _ := json.Marshal(reportIngestRequest{
+		RawText:    "SYNTHETIC: photo OCR report",
+		ReportDate: "2024-03-01",
+		SourceType: "photo",
+		PatientID:  pid,
+	})
+	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
+	w := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for unsupported source_type", w.Code)
 	}
 }
 
@@ -276,10 +337,11 @@ func newTestServerWithData(t *testing.T) (*Server, *store.Store, int) {
 		t.Fatalf("load knowledge: %v", err)
 	}
 
+	archiveDir := filepath.Join(dir, "evidence")
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	return NewServer(agent, llm, s, ks), s, pid
+	return NewServerWithArchiveDir(agent, llm, s, ks, archiveDir), s, pid
 }
 
 func TestAPI_ListReports(t *testing.T) {
@@ -494,7 +556,7 @@ func TestWeb_Index_Empty(t *testing.T) {
 	llm := &providers.MockProvider{}
 	pe := policy.NewEngine()
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s, ks)
+	srv := NewServerWithArchiveDir(agent, llm, s, ks, filepath.Join(dir, "evidence"))
 
 	req := httptest.NewRequest("GET", "/", nil)
 	addOwnerSession(req, srv)

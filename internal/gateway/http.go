@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,9 +43,17 @@ type Server struct {
 
 // NewServer creates a new HTTP gateway.
 func NewServer(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.Store, ks *rag.KnowledgeStore) *Server {
+	return NewServerWithArchiveDir(agent, llm, s, ks, "")
+}
+
+// NewServerWithArchiveDir creates a new HTTP gateway with a custom evidence archive directory.
+func NewServerWithArchiveDir(agent *runtime.AgentRuntime, llm providers.LLMProvider, s *store.Store, ks *rag.KnowledgeStore, archiveDir string) *Server {
+	if archiveDir == "" {
+		archiveDir = defaultArchiveDir()
+	}
 	gw := &Server{
 		agent:         agent,
-		pipeline:      pipeline.NewPipeline(llm, s),
+		pipeline:      pipeline.NewPipeline(llm, s, archiveDir),
 		traces:        agent.Traces(),
 		store:         s,
 		chatSvc:       chat.NewService(llm, policy.NewEngine(), ks, s),
@@ -132,6 +142,17 @@ func (gw *Server) Shutdown(ctx context.Context) error {
 // Handler returns the http.Handler for testing.
 func (gw *Server) Handler() http.Handler {
 	return gw.engine
+}
+
+func defaultArchiveDir() string {
+	if dir := os.Getenv("NURA_DATA_DIR"); dir != "" {
+		return filepath.Join(dir, "evidence")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".", ".nura", "evidence")
+	}
+	return filepath.Join(home, ".nura", "evidence")
 }
 
 // --- middleware ---
@@ -252,8 +273,12 @@ func (gw *Server) handleReportIngest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "raw_text and patient_id are required"})
 		return
 	}
+	if req.SourceType != "" && req.SourceType != "text" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "source_type must be text for the current raw-text endpoint"})
+		return
+	}
 
-	result, err := gw.pipeline.Run(c.Request.Context(), req.PatientID, req.RawText, req.ReportDate)
+	result, err := gw.pipeline.Run(c.Request.Context(), req.PatientID, req.RawText, req.ReportDate, req.SourceType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -30,6 +30,7 @@ type HealthReport struct {
 	AISummary        string     `json:"ai_summary,omitempty"`
 	SourceType       string     `json:"source_type,omitempty"`
 	SourcePath       string     `json:"source_path,omitempty"`
+	SourceHash       string     `json:"source_hash,omitempty"`
 	IsProcessed      bool       `json:"is_processed" gorm:"default:false"`
 	CreatedAt        time.Time  `json:"created_at" gorm:"autoCreateTime"`
 }

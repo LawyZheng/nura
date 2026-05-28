@@ -29,7 +29,7 @@ func newTestStoreWithPatient(t *testing.T) (*store.Store, int) {
 func TestReportTool_Interface(t *testing.T) {
 	s, _ := newTestStoreWithPatient(t)
 	llm := &providers.MockProvider{}
-	rt := NewReportTool(llm, s)
+	rt := NewReportTool(llm, s, t.TempDir())
 
 	var _ Tool = rt
 
@@ -54,7 +54,7 @@ func TestReportTool_Interface(t *testing.T) {
 func TestReportTool_Execute(t *testing.T) {
 	s, pid := newTestStoreWithPatient(t)
 	llm := &providers.MockProvider{}
-	rt := NewReportTool(llm, s)
+	rt := NewReportTool(llm, s, t.TempDir())
 
 	input, _ := json.Marshal(ReportIngestInput{
 		PatientID:  pid,
@@ -74,7 +74,7 @@ func TestReportTool_Execute(t *testing.T) {
 func TestReportTool_InvalidInput(t *testing.T) {
 	s, _ := newTestStoreWithPatient(t)
 	llm := &providers.MockProvider{}
-	rt := NewReportTool(llm, s)
+	rt := NewReportTool(llm, s, t.TempDir())
 
 	_, err := rt.Execute(context.Background(), json.RawMessage(`invalid json`))
 	if err == nil {

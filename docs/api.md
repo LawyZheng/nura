@@ -117,7 +117,7 @@ curl -X POST http://localhost:8000/agent/run \
 POST /agent/report/ingest
 ```
 
-Ingest a medical report through the 5-stage pipeline: classify → extract → normalize → merge → explain.
+Ingest pasted medical-report text. The raw text is archived locally as source evidence (path/hash/type metadata) before any parsing or LLM-derived processing, then processed through classify → extract → normalize → merge → explain.
 
 **Request Body:**
 
@@ -125,7 +125,7 @@ Ingest a medical report through the 5-stage pipeline: classify → extract → n
 |-------|------|----------|-------------|
 | `raw_text` | string | Yes | Raw text content of the medical report |
 | `report_date` | string | No | Date of the report (YYYY-MM-DD) |
-| `source_type` | string | No | `photo` or `pdf` |
+| `source_type` | string | No | Optional; only `text` is supported by the current raw-text endpoint. Photo/PDF uploads require a future binary upload flow so original files can be archived before OCR/parsing. |
 | `patient_id` | string | No | Patient identifier |
 
 **Response:**
@@ -138,6 +138,9 @@ Ingest a medical report through the 5-stage pipeline: classify → extract → n
 | `merge_actions` | string[] | Actions taken to merge with existing data |
 | `patient_state_updates` | string[] | Patient state changes |
 | `missing_or_uncertain_fields` | string[] | Fields that couldn't be reliably extracted |
+| `source_type` | string | Source type. Defaults to `text` for the current raw-text endpoint. |
+| `source_path` | string | Local archived source evidence path |
+| `source_hash` | string | SHA-256 hash of the archived source evidence bytes |
 | `user_facing_explanation` | string | Patient-friendly explanation in Chinese |
 | `stages` | array | Pipeline stage results for debugging |
 

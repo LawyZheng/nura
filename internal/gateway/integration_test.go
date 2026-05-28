@@ -62,7 +62,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		t.Fatalf("load knowledge: %v", err)
 	}
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s, ks)
+	srv := NewServerWithArchiveDir(agent, llm, s, ks, filepath.Join(dir, "evidence"))
 
 	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
@@ -214,7 +214,7 @@ func TestIntegration_ChatFlow(t *testing.T) {
 		t.Fatalf("load knowledge: %v", err)
 	}
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s, ks)
+	srv := NewServerWithArchiveDir(agent, llm, s, ks, filepath.Join(dir, "evidence"))
 
 	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
@@ -370,7 +370,7 @@ func TestIntegration_Phase3Flow(t *testing.T) {
 		t.Fatalf("load knowledge: %v", err)
 	}
 	agent := runtime.NewAgentRuntime(llm, pe, s)
-	srv := NewServer(agent, llm, s, ks)
+	srv := NewServerWithArchiveDir(agent, llm, s, ks, filepath.Join(dir, "evidence"))
 
 	do := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
