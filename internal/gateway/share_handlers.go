@@ -2,9 +2,13 @@ package gateway
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +23,49 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(b), nil
+}
+
+func hashPasscode(passcode string) (string, error) {
+	if passcode == "" {
+		return "", nil
+	}
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	h.Write(salt)
+	h.Write([]byte(passcode))
+	return hex.EncodeToString(salt) + "$" + hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func isHashedPasscode(stored string) bool {
+	return strings.Contains(stored, "$")
+}
+
+func verifyPasscode(stored, input string) bool {
+	if stored == "" && input == "" {
+		return true
+	}
+	if !isHashedPasscode(stored) {
+		return subtle.ConstantTimeCompare([]byte(stored), []byte(input)) == 1
+	}
+	parts := strings.SplitN(stored, "$", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	salt, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	expected, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	h := sha256.New()
+	h.Write(salt)
+	h.Write([]byte(input))
+	return subtle.ConstantTimeCompare(expected, h.Sum(nil)) == 1
 }
 
 type createShareRequest struct {
@@ -48,10 +95,16 @@ func (gw *Server) handleCreateShareLink(c *gin.Context) {
 		return
 	}
 
+	hashed, err := hashPasscode(req.Passcode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "hash passcode"})
+		return
+	}
+
 	link := &model.ShareLink{
 		PatientID: pid,
 		Token:     token,
-		Passcode:  req.Passcode,
+		Passcode:  hashed,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		IsActive:  true,
 	}
@@ -85,9 +138,21 @@ func (gw *Server) handleListShareLinks(c *gin.Context) {
 }
 
 func (gw *Server) handleDeleteShareLink(c *gin.Context) {
+	pid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid patient id"})
+		return
+	}
+
 	shareID, err := strconv.Atoi(c.Param("share_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid share id"})
+		return
+	}
+
+	link, err := gw.store.GetShareLink(shareID)
+	if err != nil || link.PatientID != pid {
+		c.JSON(http.StatusNotFound, gin.H{"error": "share link not found"})
 		return
 	}
 
@@ -127,12 +192,18 @@ func (gw *Server) handleShareVerify(c *gin.Context) {
 	}
 
 	passcode := c.PostForm("passcode")
-	if passcode != link.Passcode {
+	if !verifyPasscode(link.Passcode, passcode) {
 		web.Render(c.Writer, "share_auth.html", map[string]any{
 			"Token": token,
 			"Error": "密码错误，请重试",
 		})
 		return
+	}
+
+	if !isHashedPasscode(link.Passcode) {
+		if hashed, err := hashPasscode(passcode); err == nil {
+			gw.store.UpdateShareLinkPasscode(link.ID, hashed)
+		}
 	}
 
 	gw.renderShareView(c, link.PatientID)

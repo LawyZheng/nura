@@ -75,6 +75,7 @@ func newRootCmd() *cobra.Command {
 
 func newServeCmd() *cobra.Command {
 	var (
+		host     string
 		port     int
 		dataDir  string
 		provider string
@@ -138,7 +139,7 @@ func newServeCmd() *cobra.Command {
 				cancel()
 			}()
 
-			addr := ":" + strconv.Itoa(port)
+			addr := host + ":" + strconv.Itoa(port)
 			if err := srv.ListenAndServe(addr); err != nil && ctx.Err() == nil {
 				return fmt.Errorf("server: %w", err)
 			}
@@ -146,6 +147,7 @@ func newServeCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&host, "host", "127.0.0.1", "address to bind (default localhost-only; use 0.0.0.0 for LAN)")
 	cmd.Flags().IntVar(&port, "port", 8000, "port to listen on")
 	cmd.Flags().StringVar(&dataDir, "data-dir", defaultDataDir(), "directory for persistent data")
 	cmd.Flags().StringVar(&provider, "provider", "mock", "LLM provider: mock or anthropic")

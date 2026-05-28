@@ -29,9 +29,26 @@ func (gw *Server) handlePendingReminders(c *gin.Context) {
 }
 
 func (gw *Server) handleMarkReminderDone(c *gin.Context) {
+	pidStr := c.Query("patient_id")
+	if pidStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "patient_id is required"})
+		return
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid patient_id"})
+		return
+	}
+
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reminder id"})
+		return
+	}
+
+	rem, err := gw.store.GetReminder(id)
+	if err != nil || rem.PatientID != pid {
+		c.JSON(http.StatusNotFound, gin.H{"error": "reminder not found"})
 		return
 	}
 

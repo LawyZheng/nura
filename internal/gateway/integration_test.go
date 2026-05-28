@@ -446,7 +446,7 @@ func TestIntegration_Phase3Flow(t *testing.T) {
 	medBody, _ := json.Marshal(map[string]any{
 		"patient_id": pid, "name": "Synthetic Omeprazole",
 		"category": "ppi", "dosage": "20mg", "frequency": "bid",
-		"time_of_day": "早晚餐前",
+		"time_of_day":  "早晚餐前",
 		"course_start": "2026-05-20", "course_end": "2026-06-02",
 	})
 	w = do("POST", "/api/medications", medBody)
@@ -460,7 +460,7 @@ func TestIntegration_Phase3Flow(t *testing.T) {
 
 	// Step 7: Log a dose
 	logBody, _ := json.Marshal(map[string]any{"skipped": false, "note": "on time"})
-	w = do("POST", fmt.Sprintf("/api/medications/%d/log", medID), logBody)
+	w = do("POST", fmt.Sprintf("/api/medications/%d/log?patient_id=%s", medID, pidStr), logBody)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("log dose: status = %d", w.Code)
 	}

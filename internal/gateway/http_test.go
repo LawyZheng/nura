@@ -203,8 +203,8 @@ func TestCORS_Preflight(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", w.Code)
 	}
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
-		t.Errorf("CORS origin = %q, want *", got)
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
+		t.Errorf("CORS origin = %q, want http://localhost:3000", got)
 	}
 }
 
@@ -997,7 +997,7 @@ func TestAPI_UpdateMedication(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]any{"is_active": false})
-	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/medications/%d", medID), bytes.NewReader(body))
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/medications/%d?patient_id=%d", medID, pid), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
@@ -1037,7 +1037,7 @@ func TestAPI_CreateMedicationLog(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]any{"skipped": false, "note": "taken on time"})
-	req := httptest.NewRequest("POST", fmt.Sprintf("/api/medications/%d/log", medID), bytes.NewReader(body))
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/medications/%d/log?patient_id=%d", medID, pid), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
@@ -1056,7 +1056,7 @@ func TestAPI_ListMedicationLogs(t *testing.T) {
 	})
 	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: time.Now()})
 
-	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications/%d/logs", medID), nil)
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications/%d/logs?patient_id=%d", medID, pid), nil)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1208,7 +1208,7 @@ func TestAPI_MarkReminderDone(t *testing.T) {
 		Label:       "test reminder",
 	})
 
-	req := httptest.NewRequest("POST", fmt.Sprintf("/api/reminders/%d/done", remID), nil)
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/reminders/%d/done?patient_id=%d", remID, pid), nil)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1232,7 +1232,7 @@ func TestWeb_TrendsPage(t *testing.T) {
 	if !strings.Contains(body, "趋势分析") {
 		t.Error("expected page title '趋势分析'")
 	}
-	if !strings.Contains(body, "chart.js") || !strings.Contains(body, "Chart") {
-		t.Error("expected Chart.js reference")
+	if !strings.Contains(body, "/static/chart.umd.min.js") || !strings.Contains(body, "Chart") {
+		t.Error("expected local Chart.js reference")
 	}
 }
