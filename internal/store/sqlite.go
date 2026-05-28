@@ -398,6 +398,14 @@ func (s *Store) ListPendingReminders(patientID int, before time.Time) ([]*model.
 	return reminders, nil
 }
 
+func (s *Store) GetReminder(id int) (*model.MedicationReminder, error) {
+	var r model.MedicationReminder
+	if err := s.db.First(&r, id).Error; err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 func (s *Store) MarkReminderDone(id int) error {
 	now := time.Now()
 	return s.db.Model(&model.MedicationReminder{}).Where("id = ?", id).Updates(map[string]any{
@@ -428,6 +436,18 @@ func (s *Store) ListShareLinks(patientID int) ([]*model.ShareLink, error) {
 		return nil, err
 	}
 	return links, nil
+}
+
+func (s *Store) GetShareLink(id int) (*model.ShareLink, error) {
+	var link model.ShareLink
+	if err := s.db.First(&link, id).Error; err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+func (s *Store) UpdateShareLinkPasscode(id int, hashed string) error {
+	return s.db.Model(&model.ShareLink{}).Where("id = ?", id).Update("passcode", hashed).Error
 }
 
 func (s *Store) DeactivateShareLink(id int) error {

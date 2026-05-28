@@ -23,8 +23,8 @@ type createMedicationRequest struct {
 }
 
 type updateMedicationRequest struct {
-	IsActive *bool  `json:"is_active"`
-	Dosage   string `json:"dosage"`
+	IsActive  *bool  `json:"is_active"`
+	Dosage    string `json:"dosage"`
 	Frequency string `json:"frequency"`
 	CourseEnd string `json:"course_end"`
 }
@@ -62,6 +62,17 @@ func (gw *Server) handleCreateMedication(c *gin.Context) {
 }
 
 func (gw *Server) handleUpdateMedication(c *gin.Context) {
+	pidStr := c.Query("patient_id")
+	if pidStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "patient_id is required"})
+		return
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid patient_id"})
+		return
+	}
+
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid medication id"})
@@ -69,7 +80,7 @@ func (gw *Server) handleUpdateMedication(c *gin.Context) {
 	}
 
 	med, err := gw.store.GetMedication(id)
-	if err != nil {
+	if err != nil || med.PatientID != pid {
 		c.JSON(http.StatusNotFound, gin.H{"error": "medication not found"})
 		return
 	}
@@ -122,9 +133,26 @@ func (gw *Server) handleListMedications(c *gin.Context) {
 }
 
 func (gw *Server) handleCreateMedicationLog(c *gin.Context) {
+	pidStr := c.Query("patient_id")
+	if pidStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "patient_id is required"})
+		return
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid patient_id"})
+		return
+	}
+
 	medID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid medication id"})
+		return
+	}
+
+	med, err := gw.store.GetMedication(medID)
+	if err != nil || med.PatientID != pid {
+		c.JSON(http.StatusNotFound, gin.H{"error": "medication not found"})
 		return
 	}
 
@@ -150,9 +178,26 @@ func (gw *Server) handleCreateMedicationLog(c *gin.Context) {
 }
 
 func (gw *Server) handleListMedicationLogs(c *gin.Context) {
+	pidStr := c.Query("patient_id")
+	if pidStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "patient_id is required"})
+		return
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid patient_id"})
+		return
+	}
+
 	medID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid medication id"})
+		return
+	}
+
+	med, err := gw.store.GetMedication(medID)
+	if err != nil || med.PatientID != pid {
+		c.JSON(http.StatusNotFound, gin.H{"error": "medication not found"})
 		return
 	}
 
