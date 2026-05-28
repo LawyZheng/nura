@@ -4,7 +4,27 @@ Base URL: `http://localhost:8000` (default)
 
 ## Authentication
 
-Currently local-only. No authentication required. TBD for future remote access.
+Nura is local-first and single-user by default, but owner UI/API routes are protected by a per-process local owner session.
+
+Startup prints a local bootstrap URL similar to:
+
+```text
+open http://127.0.0.1:8000/local/login?token=<bootstrap-token>
+```
+
+Open that URL in the browser after each server restart. It sets:
+
+- `nura_session`: HttpOnly owner session cookie
+- `nura_csrf`: JS-readable CSRF cookie used by the built-in web UI
+
+Owner routes (`/`, `/patient/*`, `/api/*`, `/agent/*`) require the session cookie. Unsafe owner methods (`POST`, `PUT`, `DELETE`) also require `X-CSRF-Token` matching `nura_csrf`.
+
+Public exceptions:
+
+- `GET /health`
+- `/static/*`
+- `/share/:token`
+- `POST /share/:token/verify`
 
 ## Endpoints
 
@@ -209,14 +229,19 @@ All error responses follow this format:
 |------|-------------|
 | 200 | Success |
 | 400 | Bad request (missing required fields, invalid input) |
-| 404 | Resource not found (trace ID) |
+| 401 | Unauthorized (missing/invalid local owner session) |
+| 403 | Forbidden (missing/invalid CSRF token for unsafe owner method) |
+| 404 | Resource not found (trace ID, patient/resource, expired/inactive share link) |
 | 405 | Method not allowed |
+| 429 | Too many share passcode attempts |
 | 500 | Internal server error |
 
 ## Rate Limiting
 
-TBD. Currently no rate limiting is applied (local-first, single-user design).
+Share passcode verification is rate-limited per share token: after 5 failed attempts within a 15-minute window, further attempts return HTTP 429 until the window expires.
+
+Owner API routes do not currently have general-purpose request rate limiting; they are protected by the local owner session and CSRF boundary.
 
 ## CORS
 
-CORS is enabled for all origins in development mode to support local Flutter/web clients.
+CORS is restricted to localhost / 127.0.0.1 origins for local web clients. Allowed request headers include `Origin`, `Content-Type`, `Accept`, `Authorization`, and `X-CSRF-Token`.
