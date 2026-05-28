@@ -96,6 +96,8 @@ func TestAPI_UpdateMedication_WrongPatient(t *testing.T) {
 		fmt.Sprintf("/api/medications/%d?patient_id=999", medID),
 		strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -121,6 +123,8 @@ func TestAPI_UpdateMedication_MissingPatientID(t *testing.T) {
 		fmt.Sprintf("/api/medications/%d", medID),
 		strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -144,6 +148,8 @@ func TestAPI_CreateMedicationLog_WrongPatient(t *testing.T) {
 		fmt.Sprintf("/api/medications/%d/log?patient_id=999", medID),
 		strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -170,6 +176,7 @@ func TestAPI_ListMedicationLogs_WrongPatient(t *testing.T) {
 
 	req := httptest.NewRequest("GET",
 		fmt.Sprintf("/api/medications/%d/logs?patient_id=999", medID), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -195,6 +202,8 @@ func TestAPI_MarkReminderDone_WrongPatient(t *testing.T) {
 
 	req := httptest.NewRequest("POST",
 		fmt.Sprintf("/api/reminders/%d/done?patient_id=999", remID), nil)
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -222,6 +231,8 @@ func TestAPI_MarkReminderDone_MissingPatientID(t *testing.T) {
 
 	req := httptest.NewRequest("POST",
 		fmt.Sprintf("/api/reminders/%d/done", remID), nil)
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -244,6 +255,8 @@ func TestDeleteShareLink_WrongPatient(t *testing.T) {
 
 	req := httptest.NewRequest("DELETE",
 		fmt.Sprintf("/api/patient/999/share/%d", link.ID), nil)
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -266,6 +279,8 @@ func TestPasscodeNotStoredPlaintext(t *testing.T) {
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", 1),
 		strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -386,6 +401,7 @@ func TestWeb_MedicationsPage_LogDoseIncludesPatientID(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/medications", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -435,6 +451,8 @@ func TestPasscodeHashVerification(t *testing.T) {
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid),
 		strings.NewReader(`{"passcode":"5678"}`))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 

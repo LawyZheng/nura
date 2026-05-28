@@ -74,6 +74,8 @@ func TestAgentRun(t *testing.T) {
 	body, _ := json.Marshal(agentRunRequest{UserMessage: "什么是 DOB 值", PatientID: pid})
 	req := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -101,6 +103,8 @@ func TestAgentRun_MissingFields(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -114,6 +118,7 @@ func TestAgentRun_MethodNotAllowed(t *testing.T) {
 	srv, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/agent/run", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -133,6 +138,8 @@ func TestReportIngest(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -148,6 +155,8 @@ func TestReportIngest_MissingFields(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/agent/report/ingest", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -161,6 +170,7 @@ func TestTrace_NotFound(t *testing.T) {
 	srv, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/agent/debug/trace/nonexistent-id", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(w, req)
@@ -176,6 +186,8 @@ func TestTrace_AfterRun(t *testing.T) {
 	runBody, _ := json.Marshal(agentRunRequest{UserMessage: "test", PatientID: pid})
 	runReq := httptest.NewRequest("POST", "/agent/run", bytes.NewReader(runBody))
 	runReq.Header.Set("Content-Type", "application/json")
+	addOwnerSession(runReq, srv)
+	addCSRFHeader(runReq, srv)
 	runW := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(runW, runReq)
 
@@ -183,6 +195,7 @@ func TestTrace_AfterRun(t *testing.T) {
 	json.NewDecoder(runW.Body).Decode(&runResp)
 
 	traceReq := httptest.NewRequest("GET", "/agent/debug/trace/"+runResp.TraceID, nil)
+	addOwnerSession(traceReq, srv)
 	traceW := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(traceW, traceReq)
 
@@ -273,6 +286,7 @@ func TestAPI_ListReports(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/reports?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -294,6 +308,7 @@ func TestAPI_ListReports_MissingPatientID(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/api/reports", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -306,6 +321,7 @@ func TestAPI_GetReport(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/reports/1?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -328,6 +344,7 @@ func TestAPI_GetReport_WrongPatient(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/api/reports/1?patient_id=999", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -340,6 +357,7 @@ func TestAPI_GetPatient(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/patient/%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -361,6 +379,7 @@ func TestAPI_GetPatient_NotFound(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/api/patient/999", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -373,6 +392,7 @@ func TestAPI_ListIndicators_ByCategory(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/indicators?patient_id=%d&category=gastroscopy", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -394,6 +414,7 @@ func TestAPI_ListIndicators_ByName(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/indicators?patient_id=%d&name=WBC", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -420,6 +441,8 @@ func TestAPI_CreatePatient(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/patient", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -441,6 +464,7 @@ func TestWeb_Index(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -473,6 +497,7 @@ func TestWeb_Index_Empty(t *testing.T) {
 	srv := NewServer(agent, llm, s, ks)
 
 	req := httptest.NewRequest("GET", "/", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -488,6 +513,7 @@ func TestWeb_Dashboard(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -514,6 +540,7 @@ func TestWeb_ReportList(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/reports", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -537,6 +564,7 @@ func TestWeb_ReportDetail(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/reports/1", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -560,6 +588,7 @@ func TestWeb_ReportDetail_WrongPatient(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/patient/999/reports/1", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -572,6 +601,7 @@ func TestWeb_Dashboard_NotFound(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/patient/999", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -588,6 +618,8 @@ func TestAPI_UpdatePatient(t *testing.T) {
 	})
 	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/patient/%d", pid), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -613,6 +645,8 @@ func TestAPI_Chat(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/chat", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -633,6 +667,8 @@ func TestAPI_Chat_MissingFields(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("POST", "/api/chat", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -649,6 +685,7 @@ func TestAPI_ChatHistory(t *testing.T) {
 	s.InsertChatMessage(&model.ChatMessage{PatientID: pid, Role: "assistant", Content: "test answer"})
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/chat/history?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -670,6 +707,7 @@ func TestAPI_ChatHistory_MissingPatientID(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/api/chat/history", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -682,6 +720,7 @@ func TestWeb_ChatPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/chat", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -712,6 +751,8 @@ func TestAPI_CreateSymptom(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -743,6 +784,8 @@ func TestAPI_CreateSymptom_Emergency_BlackStool(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -770,6 +813,8 @@ func TestAPI_CreateSymptom_Emergency_SeverePain(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -790,6 +835,8 @@ func TestAPI_CreateSymptom_MissingPatientID(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"pain_score": 5})
 	req := httptest.NewRequest("POST", "/api/symptoms", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -809,6 +856,7 @@ func TestAPI_ListSymptoms(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/symptoms?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -830,6 +878,7 @@ func TestWeb_SymptomsPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/symptoms", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -857,6 +906,8 @@ func TestAPI_CreateMeal(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -883,6 +934,8 @@ func TestAPI_CreateMeal_WithIrritants(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -904,6 +957,8 @@ func TestAPI_CreateMeal_MissingFields(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"meal_type": "lunch"})
 	req := httptest.NewRequest("POST", "/api/meals", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -922,6 +977,7 @@ func TestAPI_ListMeals(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/meals?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -943,6 +999,7 @@ func TestWeb_MealsPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/meals", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -974,6 +1031,8 @@ func TestAPI_CreateMedication(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/medications", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -999,6 +1058,8 @@ func TestAPI_UpdateMedication(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"is_active": false})
 	req := httptest.NewRequest("PUT", fmt.Sprintf("/api/medications/%d?patient_id=%d", medID, pid), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1011,6 +1072,7 @@ func TestAPI_ListMedications(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1039,6 +1101,8 @@ func TestAPI_CreateMedicationLog(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"skipped": false, "note": "taken on time"})
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/medications/%d/log?patient_id=%d", medID, pid), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1057,6 +1121,7 @@ func TestAPI_ListMedicationLogs(t *testing.T) {
 	s.InsertMedicationLog(&model.MedicationLog{MedicationID: medID, TakenAt: time.Now()})
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/medications/%d/logs?patient_id=%d", medID, pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1078,6 +1143,7 @@ func TestWeb_MedicationsPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/medications", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1109,6 +1175,7 @@ func TestAPI_GetTrends(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/trends?patient_id=%d&days=7", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1129,6 +1196,7 @@ func TestAPI_GetTrends_MissingPatientID(t *testing.T) {
 	srv, _, _ := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", "/api/trends", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1146,6 +1214,8 @@ func TestAPI_GenerateInsight(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/trends/insight", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1179,6 +1249,7 @@ func TestAPI_PendingReminders(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/reminders/pending?patient_id=%d", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1209,6 +1280,8 @@ func TestAPI_MarkReminderDone(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/reminders/%d/done?patient_id=%d", remID, pid), nil)
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -1221,6 +1294,7 @@ func TestWeb_TrendsPage(t *testing.T) {
 	srv, _, pid := newTestServerWithData(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/patient/%d/trends", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 

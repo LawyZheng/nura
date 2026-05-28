@@ -17,6 +17,8 @@ func TestCreateShareLink(t *testing.T) {
 	body := `{"passcode":"1234"}`
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -39,6 +41,8 @@ func TestCreateShareLink_NoPasscode(t *testing.T) {
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -54,6 +58,8 @@ func TestListShareLinks(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader("{}"))
 		req.Header.Set("Content-Type", "application/json")
+		addOwnerSession(req, srv)
+		addCSRFHeader(req, srv)
 		w := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(w, req)
 		if w.Code != http.StatusCreated {
@@ -62,6 +68,7 @@ func TestListShareLinks(t *testing.T) {
 	}
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/patient/%d/shares", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -82,6 +89,8 @@ func TestShareView_NoPasscode(t *testing.T) {
 	// Create a share link without passcode
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -109,6 +118,8 @@ func TestShareView_WithPasscode(t *testing.T) {
 	// Create a share link with passcode
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader(`{"passcode":"5678"}`))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -148,6 +159,8 @@ func TestShareView_WrongPasscode(t *testing.T) {
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader(`{"passcode":"1111"}`))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -184,6 +197,8 @@ func TestDeleteShareLink(t *testing.T) {
 	// Create a link
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -193,6 +208,8 @@ func TestDeleteShareLink(t *testing.T) {
 
 	// Delete it
 	req = httptest.NewRequest("DELETE", fmt.Sprintf("/api/patient/%d/share/%d", pid, shareID), nil)
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -206,6 +223,8 @@ func createShareWithPasscode(t *testing.T, srv *Server, pid int, passcode string
 	body := fmt.Sprintf(`{"passcode":"%s"}`, passcode)
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/patient/%d/share", pid), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	addOwnerSession(req, srv)
+	addCSRFHeader(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusCreated {

@@ -132,7 +132,7 @@ function generateInsight() {
   btn.disabled = true;
   btn.textContent = '生成中...';
 
-  fetch('/api/trends/insight', {
+  nuraFetch('/api/trends/insight', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({patient_id: patientID, days: activeDays})

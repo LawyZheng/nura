@@ -58,6 +58,18 @@
     fb.textContent=(h.getAttribute('data-font')==='large')?'字-':'字+';}
   })();
   </script>
+  <script>
+  function nuraFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    var m = (opts.method || 'GET').toUpperCase();
+    if (m === 'POST' || m === 'PUT' || m === 'DELETE') {
+      var match = document.cookie.match(/(?:^|;\s*)nura_csrf=([^;]*)/);
+      if (match) opts.headers['X-CSRF-Token'] = decodeURIComponent(match[1]);
+    }
+    return fetch(url, opts);
+  }
+  </script>
   {{block "scripts" .}}{{end}}
 </body>
 </html>

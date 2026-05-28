@@ -83,7 +83,7 @@ function submitMeal(e) {
     irritant_tags: irritants
   };
 
-  fetch('/api/meals', {
+  nuraFetch('/api/meals', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(data)

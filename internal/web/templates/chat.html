@@ -51,7 +51,7 @@ function sendMessage(e) {
   appendMessage('user', msg, null);
   input.value = '';
 
-  fetch('/api/chat', {
+  nuraFetch('/api/chat', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({patient_id: {{.PatientID}}, message: msg})

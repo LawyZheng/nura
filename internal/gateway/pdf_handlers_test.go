@@ -11,6 +11,7 @@ func TestSummaryPDF_OK(t *testing.T) {
 	srv, pid := newTestServer(t)
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/patient/%d/summary/pdf", pid), nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
@@ -34,6 +35,7 @@ func TestSummaryPDF_NotFound(t *testing.T) {
 	srv, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/api/patient/99999/summary/pdf", nil)
+	addOwnerSession(req, srv)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 
