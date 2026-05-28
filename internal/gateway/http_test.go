@@ -1232,7 +1232,7 @@ func TestWeb_TrendsPage(t *testing.T) {
 	if !strings.Contains(body, "趋势分析") {
 		t.Error("expected page title '趋势分析'")
 	}
-	if !strings.Contains(body, "chart.js") || !strings.Contains(body, "Chart") {
-		t.Error("expected Chart.js reference")
+	if !strings.Contains(body, "/static/chart.umd.min.js") || !strings.Contains(body, "Chart") {
+		t.Error("expected local Chart.js reference")
 	}
 }
