@@ -56,7 +56,8 @@ A change is PR-ready when ALL of the following are true:
 4. **No security regressions** - No new command injection, XSS, SQL injection, or secrets in code.
 5. **Risk note + rollback** - If the change touches health/safety logic, data storage, policy enforcement, or LLM prompts, the PR description includes: what could go wrong and how to roll back.
 6. **Safety & privacy review** - Health-related outputs include appropriate safety boundaries (source/provenance, confidence/uncertainty, escalation language). No real patient data anywhere.
-7. **Synthetic data only** - All sample/test health data is explicitly synthetic and marked as such. No real patient names, conditions, or records.
+7. **Source evidence retention** - User-uploaded health artifacts (screenshots, reports, PDFs/images, OCR source files) are archived as original local source evidence with path/hash/metadata before parsing. Do not keep only OCR text or derived structured records.
+8. **Synthetic data only** - All sample/test health data is explicitly synthetic and marked as such. No real patient names, conditions, or records.
 
 ---
 
